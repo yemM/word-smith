@@ -82,6 +82,8 @@ export interface WsHost {
 export interface WsTextStats {
 	words: number; chars: number; charsNoSpaces: number; charsWithSpaces: number; syllables: number; sentences: number;
 	paragraphs: number; lines: number; pages: number; grade: number;
+	/** the codes of the languages the grade was measured in: a note's one, a folder's each */
+	langs?: string[];
 	files?: number; tasksDone?: number; tasksAll?: number; tasks?: { done: number; all: number } | null; totalWC?: number; charCount?: number;
 }
 // What the builders receive: the window's options plus what `exportOptsFor`

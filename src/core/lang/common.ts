@@ -194,4 +194,16 @@ export interface WsLanguage {
 	 * "hard above grade 10" means the same thing whatever the language.
 	 */
 	grade(words: number, sentences: number, syllables: number): number;
+
+	/**
+	 * Short, frequent words that are this language's and rarely another's —
+	 * what Auto counts to tell one language from the next. An elided article
+	 * counts with its apostrophe ("l'", "dell'"): Auto reads "l'homme" as "l'".
+	 */
+	markers: ReadonlySet<string>;
+	/**
+	 * What `lang:` in a note's frontmatter may say besides the code, lowercase:
+	 * the language's name in English and in itself ("french", "français").
+	 */
+	names: readonly string[];
 }

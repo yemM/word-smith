@@ -6,7 +6,17 @@
 
 **Prose checks** mark eight things worth a second look: filler words, passive voice, doubled words, easily confused pairs, vague pronouns, dialogue tags, sentence rhythm, and repeated uncommon words. Each check has its own switch and its own color. Marks are an underline by default, or a highlight, or colored text.
 
-Both run on your machine. Both are guesswork. A mark is a nudge, not a verdict. Both are English only, and in another language they mark nothing rather than marking it wrongly.
+Both run on your machine. Both are guesswork. A mark is a nudge, not a verdict. Both read English. A note in another language they recognise gets no marks rather than wrong ones (see [Languages](#languages)).
+
+## Languages
+
+Each note is read in one language, which is chosen in this order:
+
+1. **`lang:` in the note's properties** (or `ws-lang:`, which wins if both are there). `lang: en`, `lang: en-GB` and `lang: English` all work. This decides for that note, whatever the setting says. A language the plugin has no rules for (`lang: de`) leaves the note unmarked.
+2. **The Language setting** (Settings → Prose), when it names a language.
+3. **Auto**, the default. The plugin counts the short common words at the start of the note (*the, and, of*). It also knows the common words of Spanish, Italian, Portuguese, German, Dutch and Russian. A note with a few of those is recognised and left unmarked, instead of being read with English rules. A note with none of these words, or only one or two, is read as English, as before. Other languages are read as English too, so give their notes a `lang:`.
+
+The language decides which words count as filler, which constructions are passive, which pairs are easily confused, which pronouns are loose, which words are too common for the repetition radar and the Report's word list, and how syllables and readability are counted.
 
 ## How the tagger works
 

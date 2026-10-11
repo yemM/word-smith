@@ -850,4 +850,8 @@ export const LANG_EN: WsLanguage = {
 	splitSentences,
 	countSyllables,
 	grade: fkGrade,
+	markers: new Set(`the and of to is was that it with for he she they his her
+		you are this have not but what which would there their be been were
+		from at by an`.split(/\s+/).filter(Boolean)),
+	names: ['english', 'anglais', 'anglaise'],
 };

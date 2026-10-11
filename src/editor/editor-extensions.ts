@@ -2,23 +2,11 @@
 
 import {
 	CM,
-	FILLER_PHRASES,
-	FILLER_SOFT,
-	FILLER_STRONG,
 	findDialogue,
-	findIllusions,
-	findMisused,
-	findPassive,
-	findRepetitions,
 	isParagraphLine,
-	isVaguePronoun,
 	maskMarkup,
 	posBucket,
 	scanNonProseLines,
-	sentenceGrade,
-	splitSentences,
-	tagTokens,
-	tokenizeLine,
 	wsCatch,
 } from '../core/preamble';
 import type { WsToken } from '../core/preamble';
@@ -289,11 +277,15 @@ export function wsEditorExtensions(plugin: WordSmith, cm: NonNullable<typeof CM>
 
 			const doc  = view.state.doc;
 			const skip = s.syntaxSkipCode ? plugin.getNonProseLines(doc) : null;
+			// The note's language: its rules, its word lists. Null for one the
+			// plugin has no pack for — then only Dialogue, which reads quote
+			// marks and not words, still marks anything.
+			const lang = plugin.proseLanguageOf(doc, plugin.editorViewFile(view));
 			const out: Range<Decoration>[] = [];
 			const keep = (r: Range<Decoration>) => { out.push(r); };
 			// Repetition spans lines, so its tokens are collected across
 			// the whole visible range and scanned once at the end.
-			const seen: WsToken[] | null = s.checkRepetition ? [] : null;
+			const seen: WsToken[] | null = s.checkRepetition && lang ? [] : null;
 			// the lines that got a mark, by their start — the repetition pass adds its own at the end
 			const marked = new Set<number>();
 
@@ -306,7 +298,7 @@ export function wsEditorExtensions(plugin: WordSmith, cm: NonNullable<typeof CM>
 					if (!line.text.trim()) continue;
 
 					const masked = maskMarkup(line.text);
-					const tokens = tagTokens(tokenizeLine(masked), masked);
+					const tokens = lang ? lang.tag(lang.tokenize(masked), masked) : [];
 					const base   = line.from;
 					const before = out.length;
 
@@ -319,18 +311,18 @@ export function wsEditorExtensions(plugin: WordSmith, cm: NonNullable<typeof CM>
 
 					if (!checksOn) { if (out.length > before) marked.add(base); continue; }
 
-					if (s.checkPassive) {
-						for (const r of findPassive(tokens)) {
+					if (s.checkPassive && lang) {
+						for (const r of lang.findPassive(tokens)) {
 							keep(checkMark.passive.range(base + r.from, base + r.to));
 						}
 					}
-					if (s.checkIllusion) {
-						for (const r of findIllusions(tokens)) {
+					if (s.checkIllusion && lang) {
+						for (const r of lang.findIllusions(tokens)) {
 							keep(checkMark.illusion.range(base + r.from, base + r.to));
 						}
 					}
-					if (s.checkMisused) {
-						for (const r of findMisused(tokens)) {
+					if (s.checkMisused && lang) {
+						for (const r of lang.findMisused(tokens)) {
 							keep(checkMark.misused.range(base + r.from, base + r.to));
 						}
 					}
@@ -338,25 +330,23 @@ export function wsEditorExtensions(plugin: WordSmith, cm: NonNullable<typeof CM>
 					// skipped rather than double-painted at double
 					// opacity ("a lot of" already covers "lots").
 					let phraseHits: [number, number][] | null = null;
-					if (s.checkFiller) {
+					if (s.checkFiller && lang) {
 						phraseHits = [];
-						FILLER_PHRASES.lastIndex = 0;
-						let m;
-						while ((m = FILLER_PHRASES.exec(masked))) {
-							phraseHits.push([m.index, m.index + m[0].length]);
-							keep(checkMark.filler.range(base + m.index, base + m.index + m[0].length));
+						for (const r of lang.findFillerPhrases(masked)) {
+							phraseHits.push([r.from, r.to]);
+							keep(checkMark.filler.range(base + r.from, base + r.to));
 						}
 					}
-					for (let ti = 0; ti < tokens.length; ti++) {
+					for (let ti = 0; lang && ti < tokens.length; ti++) {
 						const t = tokens[ti];
 						if (s.checkFiller &&
-							(FILLER_STRONG.has(t.lw) || (s.checkFillerSoft && FILLER_SOFT.has(t.lw))) &&
+							(lang.fillerStrong.has(t.lw) || (s.checkFillerSoft && lang.fillerSoft.has(t.lw))) &&
 							!(phraseHits || []).some(pr => t.from >= pr[0] && t.to <= pr[1])) {
 							keep(checkMark.filler.range(base + t.from, base + t.to));
 						}
 						// Only sentence-initial: a pronoun mid-sentence
 						// almost always has its referent right there.
-						if (s.checkPronoun && isVaguePronoun(t, ti + 1 < tokens.length ? tokens[ti + 1] : null)) {
+						if (s.checkPronoun && lang.isVaguePronoun(t, ti + 1 < tokens.length ? tokens[ti + 1] : null)) {
 							keep(checkMark.pronoun.range(base + t.from, base + t.to));
 						}
 					}
@@ -382,11 +372,13 @@ export function wsEditorExtensions(plugin: WordSmith, cm: NonNullable<typeof CM>
 					// Sentence rhythm. Always a background tint, whatever
 					// checkStyle says: a line under thirty words is
 					// noise, and the point is to see a wall of one colour.
-					if (s.checkRhythm) {
-						for (const sent of splitSentences(masked)) {
-							const st = tokenizeLine(sent.text);
+					if (s.checkRhythm && lang) {
+						for (const sent of lang.splitSentences(masked)) {
+							const st = lang.tokenize(sent.text);
 							if (st.length < 4) continue;      // fragments are not "hard"
-							const grade = sentenceGrade(st);
+							let syl = 0;
+							for (const t of st) syl += lang.countSyllables(t.w);
+							const grade = lang.grade(st.length, 1, syl);
 							// != null, not ||: a threshold of 0 is a valid
 							// setting and `|| 10` silently discarded it.
 							const veryAt = s.checkRhythmVeryHardGrade != null ? s.checkRhythmVeryHardGrade : 14;
@@ -407,10 +399,10 @@ export function wsEditorExtensions(plugin: WordSmith, cm: NonNullable<typeof CM>
 				}
 			}
 
-			if (seen && seen.length) {
+			if (seen && seen.length && lang) {
 				const win = s.repetitionWindow    != null ? s.repetitionWindow    : 50;
 				const min = s.repetitionMinLength != null ? s.repetitionMinLength : 5;
-				for (const r of findRepetitions(seen, win, min)) {
+				for (const r of lang.findRepetitions(seen, win, min)) {
 					out.push(checkMark.repeat.range(r.from, r.to));
 					marked.add(doc.lineAt(r.from).from);
 				}

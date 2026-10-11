@@ -5645,6 +5645,7 @@ export const DEFAULT_SETTINGS = {
 
 	// ── Syntax highlight ──────────────────────────────────────────────────────
 	syntaxSkipCode:           true,
+	proseLanguage:            'auto',     // 'auto' | a language pack's code ('en', 'fr'); a note's `lang:` wins
 	syntaxStyle:              'text',     // 'text' | 'highlight' | 'line'
 	checksEnabled:            false,      // master switch over the writing checks
 	checkStyle:               'line',     // same options, for the writing checks (Squiggle until 1.5.4; a vault on it moves here)

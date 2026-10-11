@@ -49,6 +49,7 @@ ws-hemingway: true
 ws-syntax: true       # the word classes
 ws-checks: false      # the prose checks
 ws-typography: false
+lang: en              # the language Syntax and the prose checks read it in
 ---
 ```
 

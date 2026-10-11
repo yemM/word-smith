@@ -16,7 +16,7 @@ src/
     obsidian-private.d.ts the private API's shape, as used here
     lang/                 the prose analysis, one language pack per file:
                           common.ts (the shared parts), en.ts, and
-                          index.ts (the list of packs)
+                          index.ts (the list of packs, and Auto)
   plugin/
     plugin.ts             the plugin class: lifecycle, settings, commands
     bar.ts, menu.ts, themes.ts, paint.ts, focus.ts, stores.ts, history.ts,

@@ -9,9 +9,40 @@ import { MarkdownView, TFile, Modal, Platform } from 'obsidian';
 import type { TAbstractFile } from 'obsidian';
 import type { Text as CmText } from '@codemirror/state';
 import type { WsTextStats } from '../core/settings';
-import { CJK_CHAR, READ_WPM, wsPagesOf, REPORT_STOPWORDS, WORDISH, countSyllables, fkGrade, isParagraphLine, maskForCounting, wsGlyphWord, wsSortArrow, parseColorRGB, scanNonProseLines, splitSentences, tokenizeLine, wsCatch, wsShareText, wsIsFile, wsErrMsg } from '../core/preamble';
+import { CJK_CHAR, READ_WPM, wsPagesOf, WORDISH, LANG_EN, isParagraphLine, maskForCounting, wsGlyphWord, wsSortArrow, parseColorRGB, scanNonProseLines, wsCatch, wsShareText, wsIsFile, wsErrMsg, wsLanguageByCode, wsResolveLanguage } from '../core/preamble';
+import type { WsLanguage } from '../core/preamble';
 import type WordSmith from './plugin';
 import type { WsInkDrop, WsInkBubble, WsInkWave, WsInkOrb } from './plugin';
+
+// How much of a note's start its language is resolved from.
+const WS_LANG_SAMPLE = 6000;
+
+// A FOLDER'S OR A SELECTION'S GRADE. Each language's words are graded by its
+// own formula, from their summed words, sentences and syllables, and the
+// grades are weighted by words: a French chapter and an English note do not
+// share a syllable count. In one language it is the grade of the sums, as it
+// always was.
+type WsLangSums = Record<string, { words: number; sentences: number; syllables: number }>;
+function wsAddLangSums(sums: WsLangSums, stats: WsTextStats) {
+	const code = (stats.langs && stats.langs[0]) || 'en';
+	const s = sums[code] || (sums[code] = { words: 0, sentences: 0, syllables: 0 });
+	s.words += stats.words || 0;
+	s.sentences += stats.sentences || 0;
+	s.syllables += stats.syllables || 0;
+}
+function wsTotalGrade(sums: WsLangSums, total: WsTextStats) {
+	const codes = Object.keys(sums);
+	const pack = (code: string) => wsLanguageByCode(code) || LANG_EN;
+	if (codes.length <= 1) return pack(codes[0] || 'en').grade(total.words, total.sentences, total.syllables);
+	let sum = 0, words = 0;
+	for (const code of codes) {
+		const s = sums[code];
+		if (!s.words) continue;
+		sum += pack(code).grade(s.words, s.sentences, s.syllables) * s.words;
+		words += s.words;
+	}
+	return words ? sum / words : 0;
+}
 
 // THE JAR'S FRAME, at module level since its phases are (A489): what one tick
 // decides, handed to each phase. A stage of the pour is how wavy, how far
@@ -2687,7 +2718,7 @@ export const reportMethods = {
 	// "alice" are one word); nothing is stemmed ("walk" and "walked" are two
 	// rows, which is honest where a wrong stem would read as a bug); a
 	// numeral is not a word. `into` lets a folder add its notes into one map.
-	wordFreqInto(this: WordSmith, text: string, into: Map<string, number> | null) {
+	wordFreqInto(this: WordSmith, text: string, into: Map<string, number> | null, file?: TAbstractFile | null) {
 		const map = into || new Map<string, number>();
 		if (!text) return map;
 		const lines = String(text).split('\n');
@@ -2697,20 +2728,28 @@ export const reportMethods = {
 			if (!skip.has(i + 1)) kept.push(maskForCounting(lines[i]));
 		}
 		const prose = kept.join('\n').replace(/%%[\s\S]*?%%/g, ' ').replace(CJK_CHAR, ' ');
+		// Words as the note's language counts them: in French, "l'homme" is
+		// the article and the noun, so the noun is what the list shows.
+		const lang = this.proseLanguageOfText(text, file);
 		for (const run of prose.match(WORDISH) || []) {
-			const w = run.toLowerCase().replace(/\u2019/g, "'").replace(/[-'_]+$/, '');
-			if (!w || /^\p{N}/u.test(w)) continue;
-			map.set(w, (map.get(w) || 0) + 1);
+			const whole = run.toLowerCase().replace(/\u2019/g, "'").replace(/[-'_]+$/, '');
+			for (const w of lang && lang.splitWord ? lang.splitWord(whole) : [whole]) {
+				if (!w || /^\p{N}/u.test(w)) continue;
+				map.set(w, (map.get(w) || 0) + 1);
+			}
 		}
 		return map;
 	},
 
 	// The top `n` of a frequency map, the common words left out unless
 	// `common` says otherwise; ties go alphabetically so the list is stable.
-	topWords(this: WordSmith, freq: Map<string, number>, n: number, common: boolean) {
+	topWords(this: WordSmith, freq: Map<string, number>, n: number, common: boolean, langs?: readonly string[]) {
 		const rows = [];
+		// The common words of the languages the words are in: the note's, or
+		// each one in the folder. English when nothing says.
+		const packs = (langs && langs.length ? langs : ['en']).map((c) => wsLanguageByCode(c) || LANG_EN);
 		if (freq) for (const [w, c] of freq) {
-			if (!common && REPORT_STOPWORDS.has(w)) continue;
+			if (!common && packs.some((l) => l.reportStopwords.has(w))) continue;
 			rows.push({ w, n: c });
 		}
 		rows.sort((a, b) => b.n - a.n || (a.w < b.w ? -1 : a.w > b.w ? 1 : 0));
@@ -2721,14 +2760,17 @@ export const reportMethods = {
 	async wordFreqFor(this: WordSmith, files: TFile[]) {
 		const map = new Map<string, number>();
 		for (const f of files || []) {
-			try { this.wordFreqInto(await this.app.vault.cachedRead(f), map); } catch (_) { wsCatch('wordFreqFor: this.wordFreqInto(await this.app.vault.cachedRead(f), map);', _); }
+			try { this.wordFreqInto(await this.app.vault.cachedRead(f), map, f); } catch (_) { wsCatch('wordFreqFor: this.wordFreqInto(await this.app.vault.cachedRead(f), map, f);', _); }
 		}
 		return map;
 	},
 
 	// from countProse so the report can never disagree with the status bar.
-	analyzeText(this: WordSmith, text: string): WsTextStats {
+	analyzeText(this: WordSmith, text: string, file?: TAbstractFile | null): WsTextStats {
 		const base = this.countProse(text);
+		// A note in a language with no pack keeps the English measures, as
+		// every note had them before languages: the counts still mean something.
+		const lang = this.proseLanguageOfText(text, file) || LANG_EN;
 		const lines = String(text || '').split('\n');
 		const skip  = scanNonProseLines(lines);
 		let sentences = 0, syllables = 0, paragraphs = 0, lineCount = 0, inPara = false;
@@ -2739,11 +2781,11 @@ export const reportMethods = {
 			lineCount++;
 			if (!inPara) { paragraphs++; inPara = true; }
 			const masked = maskForCounting(raw);
-			for (const sent of splitSentences(masked)) {
-				const toks = tokenizeLine(sent.text);
+			for (const sent of lang.splitSentences(masked)) {
+				const toks = lang.tokenize(sent.text);
 				if (!toks.length) continue;
 				sentences++;
-				for (const t of toks) syllables += countSyllables(t.w);
+				for (const t of toks) syllables += lang.countSyllables(t.w);
 			}
 		}
 		return {
@@ -2757,7 +2799,8 @@ export const reportMethods = {
 			lines:      lineCount,
 			// The manuscript convention, the one the Organizer's Pages reads too.
 			pages:      wsPagesOf(base.words),
-			grade:      fkGrade(base.words, sentences, syllables)
+			grade:      lang.grade(base.words, sentences, syllables),
+			langs:      [lang.code]
 		};
 	},
 
@@ -2806,6 +2849,37 @@ export const reportMethods = {
 		const stats = { doc, totalWC, charCount, paras, tasks };
 		if (doc) this._docStatsCache = stats; // only cache when identity is trackable
 		return stats;
+	},
+
+	// THE LANGUAGE A NOTE IS READ IN, for the word classes, the prose checks
+	// and the Report: `lang:` in its frontmatter (getOverrides), else the
+	// Language setting, else its own words (see core/lang/index.ts). Null for
+	// a language with no pack — then nothing is tagged or checked rather than
+	// checked wrong. Cached on document identity like the fence map below;
+	// the start of the note is all detection reads.
+	proseLanguageOf(this: WordSmith, doc: CmText, file: TAbstractFile | null): WsLanguage | null {
+		const setting = this.proseLanguageSetting(file);
+		const c = this._langCache;
+		if (c && c.doc === doc && c.setting === setting) return c.lang;
+		const lang = wsResolveLanguage(doc.sliceString(0, WS_LANG_SAMPLE), setting);
+		this._langCache = { doc, setting, lang };
+		return lang;
+	},
+
+	proseLanguageOfText(this: WordSmith, text: string, file?: TAbstractFile | null): WsLanguage | null {
+		return wsResolveLanguage(String(text || '').slice(0, WS_LANG_SAMPLE), this.proseLanguageSetting(file));
+	},
+
+	// The note's own Language setting: its `lang:`, else the plugin's. A
+	// note's `lang:` may name a language with no pack, and the note is left
+	// unmarked; the setting naming one (pasted, or a pack since removed) is
+	// Auto, not a vault left unmarked.
+	proseLanguageSetting(this: WordSmith, file: TAbstractFile | null | undefined) {
+		const o = this.getOverrides(file);
+		const v = o && o.proseLanguage;
+		if (typeof v === 'string') return v;
+		const s = String(this.settings.proseLanguage || 'auto');
+		return wsLanguageByCode(s) ? s : 'auto';
 	},
 
 	// Line numbers the prose analyser must not touch: YAML frontmatter, fenced
@@ -3172,6 +3246,7 @@ export const reportMethods = {
 		const total: WsTextStats & { tasksDone: number; tasksAll: number } = { words: 0, chars: 0, charsNoSpaces: 0, charsWithSpaces: 0,
 			syllables: 0, sentences: 0, tasksDone: 0, tasksAll: 0,
 			paragraphs: 0, lines: 0, pages: 0, grade: 0, files: files.length };
+		const byLang: WsLangSums = {};
 		for (const file of files) {
 			let stats = null, tasks = null;
 			const hit = this.wordCountCache.get('stats:' + file.path);
@@ -3184,7 +3259,7 @@ export const reportMethods = {
 			if (!stats) {
 				try {
 					const text = await this.app.vault.cachedRead(file);
-					stats = this.analyzeText(text);
+					stats = this.analyzeText(text, file);
 					try { tasks = this.countTasks(text); } catch { tasks = { done: 0, all: 0 }; }
 					this.wordCountCache.set('stats:' + file.path,
 						{ mtime: file.stat.mtime, stats, tasks });
@@ -3199,9 +3274,11 @@ export const reportMethods = {
 			total.sentences  += stats.sentences;
 			total.paragraphs += stats.paragraphs;
 			total.lines      += stats.lines || 0;
+			wsAddLangSums(byLang, stats);
 		}
 		total.pages = wsPagesOf(total.words);
-		total.grade = fkGrade(total.words, total.sentences, total.syllables);
+		total.grade = wsTotalGrade(byLang, total);
+		total.langs = Object.keys(byLang);
 		// NULL WHEN THERE ARE NONE, not `0/0`. A folder with no boxes in it has
 		// no answer to "how many are left", and the cell shows nothing — the
 		// same rule every other reading in the band follows.
@@ -4532,8 +4609,8 @@ export const reportMethods = {
 				}
 				let text = '';
 				try { text = await this.app.vault.cachedRead(repFile); } catch (_) { wsCatch('openReportModal / render: text = await plugin.app.vault.cachedRead(repFile);', _); }
-				stats  = this.analyzeText(text);
-				freq   = this.wordFreqInto(text, new Map<string, number>());
+				stats  = this.analyzeText(text, repFile);
+				freq   = this.wordFreqInto(text, new Map<string, number>(), repFile);
 				// The file's own goal, not the vault-wide writing goal — those
 				// are different numbers and showing one under the other's name
 				// made the ring meaningless.
@@ -4676,11 +4753,11 @@ export const reportMethods = {
 	// the foot gave the list a strip too short to read a novel's words in.
 	// Each row is word · count · %: the count beside the percentage because
 	// "12 times" is what a writer acts on and "1.4%" is what they compare.
-	// Common words out by default (REPORT_STOPWORDS says which), a tick
+	// Common words out by default (the language's reportStopwords say which), a tick
 	// brings them back ("Common words" — two words, so the search beside it
 	// keeps its width in a 400px window); the tick is the panel's own and is
 	// not saved.
-	buildReportWords(this: WordSmith, into: HTMLDivElement, stats: { words: number }, freq: Map<string, number>) {
+	buildReportWords(this: WordSmith, into: HTMLDivElement, stats: { words: number; langs?: string[] }, freq: Map<string, number>) {
 		into.addClass('ws-report-host');
 		const box = into.createDiv({ cls: 'ws-report-words' });
 		const bar = box.createDiv({ cls: 'ws-report-words-bar' });
@@ -4768,7 +4845,7 @@ export const reportMethods = {
 		// so a narrowed "walk" keeps the share it had.
 		let base: { w: string; n: number }[] = [];
 		let top = 0;
-		const rebase = () => { base = this.topWords(freq, Infinity, chk.checked); top = base.length ? base[0].n : 0; };
+		const rebase = () => { base = this.topWords(freq, Infinity, chk.checked, stats.langs); top = base.length ? base[0].n : 0; };
 		const draw = () => {
 			tbody.empty();
 			markHeads();
@@ -4854,13 +4931,14 @@ export const reportMethods = {
 		const files = this.selectionFiles(rows);
 		const total: WsTextStats & { tasksDone?: number; tasksAll?: number } = { words: 0, chars: 0, charsNoSpaces: 0, charsWithSpaces: 0,
 			syllables: 0, sentences: 0, paragraphs: 0, lines: 0, pages: 0, grade: 0, files: files.length };
+		const byLang: WsLangSums = {};
 		for (const file of files) {
 			let stats = null;
 			const hit = this.wordCountCache.get('stats:' + file.path);
 			if (hit && file.stat && hit.mtime === file.stat.mtime) stats = hit.stats;
 			if (!stats) {
 				try {
-					stats = this.analyzeText(await this.app.vault.cachedRead(file));
+					stats = this.analyzeText(await this.app.vault.cachedRead(file), file);
 					if (file.stat) {
 						this.wordCountCache.set('stats:' + file.path,
 							{ mtime: file.stat.mtime, stats });
@@ -4875,9 +4953,11 @@ export const reportMethods = {
 			total.sentences       += stats.sentences || 0;
 			total.paragraphs      += stats.paragraphs || 0;
 			total.lines           += stats.lines || 0;
+			wsAddLangSums(byLang, stats);
 		}
 		total.pages = wsPagesOf(total.words);
-		total.grade = fkGrade(total.words, total.sentences, total.syllables);
+		total.grade = wsTotalGrade(byLang, total);
+		total.langs = Object.keys(byLang);
 		return total;
 	},
 
