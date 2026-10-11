@@ -1149,6 +1149,41 @@ export const TYPO_MAX_LOOKBACK = TYPO_RULES.reduce((n, r) => Math.max(n, r.text.
 // what makes don't come out as don\u2019t with no apostrophe special case.
 export const TYPO_OPENS_AFTER = /[\s([{<\u2018\u201c\u2013\u2014\u2026-]/;
 
+// ── FRENCH SPACING ("French spacing" under Typography) ──────────────────
+// French sets a narrow no-break space (U+202F) before ; ! ? and a no-break
+// space (U+00A0) before : and inside « », so the mark never starts a line on
+// its own. `before` is the line up to the caret, `ch` the character typed.
+// The answer is what to replace and with what, for applyTypography — so
+// Backspace gives the plain characters back — or null to type as usual.
+// A space typed before the mark is folded into it: "mot ?" and "mot?" both
+// come out "mot ?". Left alone: a run of marks after the first ("?!"), a
+// time ("12:30"), a link's scheme or address, a footnote's "[^1]:", a
+// Dataview "key::", and the start of a line, where "!" opens an embed.
+export function wsFrenchSpacing(before: string, ch: string): { matched: string; glyph: string } | null {
+	const prev = before.slice(-1);
+	if (ch === ' ') {
+		if (prev === '\u00ab') return { matched: ' ', glyph: '\u00a0' };
+		// « has its space already: a second one would show as a gap.
+		if (before.endsWith('\u00ab\u00a0')) return { matched: '\u00a0 ', glyph: '\u00a0' };
+		return null;
+	}
+	// "key::" is a Dataview field, not French: the second colon takes the
+	// space back.
+	if (ch === ':' && before.endsWith('\u00a0:')) return { matched: '\u00a0::', glyph: '::' };
+	const space = ch === ';' || ch === '!' || ch === '?' ? '\u202f'
+		: ch === ':' || ch === '\u00bb' ? '\u00a0' : '';
+	if (!space || !prev || !/\S/.test(before)) return null;
+	if (prev === '\u00a0' || prev === '\u202f') return null;
+	if (ch !== '\u00bb' && /[;:!?]/.test(prev)) return null;
+	const word = before.split(/\s/).pop() || '';
+	if (/:\/\/|^www\./i.test(word) || /\[\[[^\]]*$/.test(before) || /\]\([^)]*$/.test(before)) return null;
+	if (ch === ':' && (/\d$/.test(before) || /(https?|ftp|mailto|file|obsidian|tel)$/i.test(before) ||
+		/^\s*\[\^[^\]]*\]$/.test(before))) return null;
+	if (prev === ' ') return { matched: ' ' + ch, glyph: space + ch };
+	if (/[\p{L}\p{N})\]\u00bb”\u2019"'*_\u2026]/u.test(prev)) return { matched: ch, glyph: space + ch };
+	return null;
+}
+
 // ── A SENTENCE STARTS HERE ("Capitalize sentences") ───────────────────
 // Read from the line's text before the caret and the line above it (null on
 // the first line). A sentence starts at the start of a line, past its block
@@ -5720,6 +5755,7 @@ export const DEFAULT_SETTINGS = {
 	typoArrows:               true,
 	typoComparisons:          false,
 	typoGuillemets:           false,
+	typoFrench:               'off',      // 'off' | 'auto' (notes read as French) | 'always': spaces before ; : ! ? and inside « »
 	typoFractions:            true,
 	typoCapitalize:           false,
 

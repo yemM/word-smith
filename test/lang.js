@@ -261,5 +261,22 @@ is('quotes still work', dlg('Il dit « bonjour » puis partit.', FR), ['« bonjo
 is('English quotes', dlg('He said \u201cNot now\u201d and left.'), ['\u201cNot now\u201d']);
 is('German quotes too', dlg('Er sagte: \u201eKomm her\u201c und ging.', null), ['\u201eKomm her\u201c']);
 
+// ── French spacing ─────────────────────────────────────────────────────
+const sp = (before, ch) => { const r = P.wsFrenchSpacing(before, ch); return r ? [r.matched, r.glyph] : null; };
+is('FR spacing: after a word', sp('Vraiment', '?'), ['?', '\u202f?']);
+is('FR spacing: a typed space folds in', sp('Vraiment ', '!'), [' !', '\u202f!']);
+is('FR spacing: colon', sp('Il dit', ':'), [':', '\u00a0:']);
+is('FR spacing: closing guillemet', sp('« Oui', '»'), ['»', '\u00a0»']);
+is('FR spacing: inside an opening guillemet', sp('Il dit «', ' '), [' ', '\u00a0']);
+is('FR spacing: "?!" takes one space', sp('Quoi\u202f?', '!'), null);
+is('FR spacing: a time', sp('À 12', ':'), null);
+is('FR spacing: a link', sp('voir https', ':'), null);
+is('FR spacing: an address', sp('voir https://exemple.fr/page', '?'), null);
+is('FR spacing: a footnote', sp('[^1]', ':'), null);
+is('FR spacing: line start (an embed)', sp('', '!'), null);
+is('FR spacing: inside a wikilink', sp('voir [[Note', ':'), null);
+is('FR spacing: a space after « has one already', sp('Il dit \u00ab\u00a0', ' '), ['\u00a0 ', '\u00a0']);
+is('FR spacing: a Dataview field', sp('statut\u00a0:', ':'), ['\u00a0::', '::']);
+
 console.log(pass + ' passed, ' + fail + ' failed  (language packs)');
 if (fail) process.exit(1);

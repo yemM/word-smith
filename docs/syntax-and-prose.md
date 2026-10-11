@@ -22,6 +22,8 @@ The language decides which words count as filler, which constructions are passiv
 
 **Dialogue** marks everything inside quotes, in any language. It also marks a line that opens with a dash (`— À demain, Johan.`), as French, Spanish, Italian, Portuguese and Russian set dialogue. On those lines the narrator's incise is left out. In French that's *dit-il* or *soupira Johan* after a comma, a question or exclamation mark, or an ellipsis, and the mark picks up again where the speaker does. In the other languages it's the words between two dashes (`—respondió don Quijote—`). Not in English, where a line opening with a dash is an attribution (`— Robert Frost`). In every language, the source under an epigraph in a quote block (`> — Victor Hugo, Les Misérables`) is left alone.
 
+**French spacing** (Settings → Text → Typography) puts a narrow no-break space before `;` `!` `?`, and a no-break space before `:` and inside `« »`, as you type. With curly quotes on, `"` becomes `« »`. You can turn it on for notes read as French only, or for every note. Backspace right after a substitution gives back what you typed.
+
 **Adding a language** takes one file and one line: see [Adding a language](adding-a-language.md).
 
 ## How the tagger works

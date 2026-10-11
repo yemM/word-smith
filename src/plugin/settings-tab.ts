@@ -1807,6 +1807,8 @@ export class WordSmithSettingTab extends PluginSettingTab {
 				{ name: 'Arrows', desc: '-> →, <- ←, => ⇒', control: { type: 'toggle', key: 'typoArrows' }, visible: ty },
 				{ name: 'Comparisons', desc: '<= ≤, >= ≥, /= ≠', control: { type: 'toggle', key: 'typoComparisons' }, visible: ty },
 				{ name: 'Guillemets', desc: '<< « and >> »', control: { type: 'toggle', key: 'typoGuillemets' }, visible: ty },
+				{ name: 'French spacing', desc: 'A no-break space before ; : ! ? and inside « », and " typed as « ». In French notes only, or everywhere.',
+					control: { type: 'dropdown', key: 'typoFrench', options: { off: 'Off', auto: 'French notes', always: 'Everywhere' } }, visible: ty },
 				{ name: 'Fractions', desc: '1/2 ½, 3/4 ¾, and the rest.', control: { type: 'toggle', key: 'typoFractions' }, visible: ty },
 				{ name: 'Capitalize sentences', desc: 'The first letter of a sentence becomes a capital.', control: { type: 'toggle', key: 'typoCapitalize' }, visible: all(ty, () => !Platform.isMobile) },
 			], this.railed('text', 'typography')),
