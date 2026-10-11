@@ -2138,7 +2138,21 @@ export const REPORT_STOPWORDS = new Set(`the a an and or but nor if then than th
 // far worse than one that stops early. The line is the unit here.
 // THE LANGUAGE'S SPEECH MARKS (A610): the pairs its pack declares beside the ones
 // above (German »…«, Polish „…”, Swedish ”…”), and the dash it opens speech with.
-export interface WsDialogueMarks { pairs: Record<string, string>; dashes: string; verbs?: string[] }
+export interface WsDialogueMarks {
+	pairs: Record<string, string>; dashes: string; verbs?: string[];
+	/**
+	 * What the narrator goes on with after a tag's comma, each entry its words, "…" for an
+	 * ending ("comme", "en …ant"). A pack that names it writes its tags the French way: the
+	 * speech picks up again after the tag, and a subject pronoun opens no tag.
+	 */
+	after?: string[][];
+	/** the pack's words of a class of their own ("maintenant", "avant", "enfant"), which an ending in `after` never names */
+	known?: string[];
+	/** the pack's abbreviations, each with its dot ("m.", "etc."): a dot that ends one ends no sentence */
+	abbr?: string[];
+	/** the pack's sentence ends, where a tag's sentence stops */
+	stops?: string;
+}
 
 // SPEECH BY DASH (A610), as Spanish, Polish, the Scandinavian languages and French
 // write it: the dash that opens the paragraph opens the speech, and each dash after
@@ -2149,9 +2163,13 @@ export interface WsDialogueMarks { pairs: Record<string, string>; dashes: string
 // "!", "?", "…" or "," and then one of the language's speech verbs, the first word
 // after it or the second ("a zis", "i-a spus"), or the verb of an inversion ("dit-il",
 // "demanda-t-elle"), ends the speech at the mark. A capital after it is more speech.
+// IN FRENCH (a pack with `after`), a subject pronoun first opens a clause, not a tag:
+// "— Ok, on lance la séquence." — unless the verb after it is inverted ("nous dit-il").
+// In Polish, "on powiedział" is a tag, and stays one.
 const WS_TAG_MARKS = ',!?\u2026';
 const WS_INVERTED = new Set(['il', 'elle', 'ils', 'elles', 'on', 't-il', 't-elle', 't-on', 'je', 'tu', 'nous', 'vous']);
-function wsSpeechTagAt(text: string, k: number, said: Set<string>): boolean {
+const WS_SUBJECTS = new Set(['je', 'tu', 'il', 'elle', 'on', 'nous', 'vous', 'ils', 'elles']);
+function wsSpeechTagAt(text: string, k: number, said: Set<string>, french: boolean): boolean {
 	const m = /^\s+(\p{Ll}[\p{L}\p{M}'\u2019-]*)(?:\s+([\p{L}\p{M}'\u2019-]+))?/u.exec(text.slice(k + 1, k + 80));
 	if (!m) return false;
 	const low = (w: string) => w.toLowerCase().replace(/\u2019/g, "'").normalize('NFC').replace(/\u015f/g, '\u0219').replace(/\u0163/g, '\u021b');
@@ -2162,9 +2180,58 @@ function wsSpeechTagAt(text: string, k: number, said: Set<string>): boolean {
 		const cut = x.indexOf('-');
 		return cut > 0 && WS_INVERTED.has(x.slice(cut + 1)) && said.has(x.slice(0, cut));
 	};
-	return verb(m[1]) || verb(m[2]);
+	const clause = french && WS_SUBJECTS.has(low(m[1])) && !!m[2] && m[2].indexOf('-') === -1;
+	return verb(m[1]) || (!clause && verb(m[2]));
 }
-function wsDashDialogue(text: string, at: number, dashes: string, verbs?: string[]) {
+
+// SPEECH AGAIN AFTER THE TAG, in a pack that names what its narrator goes on with
+// (`after`): French picks the speech up past the tag's comma ("— Tout est prêt,
+// souffla-t-il, on peut partir.") or past the end of the tag's sentence ("coupa-t-il,
+// vibrant. Ça va marcher."). After the comma the narrator keeps the floor when what
+// follows opens with one of the pack's words or endings ("comme se parlant à lui-même",
+// "osant à peine", "en se levant"), or is one word to its sentence's end ("essoufflé.",
+// "agacé. Je reste.") — but one word shouted or asked is speech ("jamais !"). A dot that
+// ends an abbreviation or an initial ends no sentence ("dit M. Madeleine"). Returns where
+// the speech picks up, or -1 when the line ends first or a dash takes over.
+function wsDotHolds(text: string, k: number, abbr: Set<string>): boolean {
+	const w = (/[\p{L}.'\u2019-]*$/u.exec(text.slice(Math.max(0, k - 24), k + 1)) || [''])[0].toLowerCase();
+	const last = w.slice(w.lastIndexOf('-') + 1);
+	return /^\p{L}\.$/u.test(last) || abbr.has(w) || abbr.has(last);
+}
+function wsNarrationGoesOn(rest: string, after: string[][], known: Set<string>, stopAt: (i: number) => boolean): boolean {
+	let end = 0;
+	while (end < rest.length && !stopAt(end)) end++;
+	const said = rest.slice(0, end).replace(/\u2019/g, "'").split(/[\s\u00a0\u202f]+/)
+		.map((w) => w.replace(/[^\p{L}\p{M}'-]+$/u, '')).filter(Boolean);
+	if (said.length <= 1) return end >= rest.length || (rest[end] !== '!' && rest[end] !== '?');
+	return after.some((parts) => parts.length > 0 && parts.every((part, i) => {
+		if (!said[i]) return false;
+		const w = said[i].toLowerCase();
+		if (part.charAt(0) !== '\u2026') return w === part;
+		// an ending names a word in lower case, and none the pack knows: not "Constant",
+		// "maintenant" or "l'enfant"
+		const ending = part.slice(1), bare = w.replace(/^\p{L}'/u, '');
+		return said[i] === w && w.length > ending.length && w.endsWith(ending) && !known.has(w) && !known.has(bare);
+	}));
+}
+function wsAfterTag(text: string, start: number, dashes: string, m: { after: string[][]; known: Set<string>; abbr: Set<string>; stops: string }): number {
+	const stopAt = (k: number) => m.stops.indexOf(text[k]) !== -1 && !(text[k] === '.' && wsDotHolds(text, k, m.abbr));
+	let k = start;
+	for (; k < text.length; k++) {
+		if (dashes.indexOf(text[k]) !== -1) return -1;
+		if (text[k] === ',') {
+			const at = k + 1;
+			if (!wsNarrationGoesOn(text.slice(at, at + 300), m.after, m.known, (i) => stopAt(at + i))) { k++; break; }
+			for (k++; k < text.length && !stopAt(k); k++) if (dashes.indexOf(text[k]) !== -1) return -1;
+			break;
+		}
+		if (stopAt(k)) break;
+	}
+	while (k < text.length && (m.stops.indexOf(text[k]) !== -1 || /\s/.test(text[k]))) k++;
+	return k < text.length && dashes.indexOf(text[k]) === -1 ? k : -1;
+}
+function wsDashDialogue(text: string, at: number, dashes: string, marks: WsDialogueMarks) {
+	const verbs = marks.verbs;
 	const out: { from: number; to: number }[] = [];
 	const add = (from: number, to: number) => {
 		while (from < to && /[\s.,;:]/.test(text[from])) from++;
@@ -2173,11 +2240,16 @@ function wsDashDialogue(text: string, at: number, dashes: string, verbs?: string
 	};
 	let speech = true, from = at;
 	const said = verbs && verbs.length ? new Set(verbs) : null;
+	const goesOn = marks.after && marks.after.length ? {
+		after: marks.after, known: new Set(marks.known || []), abbr: new Set(marks.abbr || []), stops: marks.stops || '.!?\u2026',
+	} : null;
 	for (let k = at + 1; k < text.length; k++) {
-		if (speech && said && WS_TAG_MARKS.indexOf(text[k]) !== -1 && wsSpeechTagAt(text, k, said)) {
+		if (speech && said && WS_TAG_MARKS.indexOf(text[k]) !== -1 && wsSpeechTagAt(text, k, said, !!goesOn)) {
 			add(from, k + 1);
 			speech = false;
 			from = k + 1;
+			const back = goesOn ? wsAfterTag(text, k + 1, dashes, goesOn) : -1;
+			if (back > 0) { speech = true; from = back; k = back - 1; }
 			continue;
 		}
 		if (dashes.indexOf(text[k]) === -1) continue;
@@ -2191,12 +2263,22 @@ function wsDashDialogue(text: string, at: number, dashes: string, verbs?: string
 	return out;
 }
 
+// AN EPIGRAPH'S SOURCE, in the quote block that holds the epigraph, is no reply: names and
+// titles in capitals, the small words between them, initials, a year, emphasis, and no
+// closing stop ("> — Victor Hugo, *Les Misérables*, 1862"). A reply has a word in lower case
+// or ends on its punctuation ("> — Merci, Hugo."); outside a quote block a dash line is
+// always one.
+const WS_ATTRIBUTION = /^[\s\u00a0]*[*_(]*[\p{Lu}\d][\p{L}\d'\u2019-]*[*_)]*\.?(?:[\s\u00a0,]+(?:[*_(]*[\p{Lu}\d][\p{L}\d'\u2019-]*[*_)]*\.?|de|du|des|d'|la|le|les|von|van|der|di|da|del|y|e|et|and|of|the|in))+[\s\u00a0]*$/u;
+
 export function findDialogue(line: string, marks?: WsDialogueMarks | null) {
 	const text = String(line || '');
 	const out = [];
 	if (marks && marks.dashes) {
 		const lead = (/^[\s>]*/.exec(text) || [''])[0].length;
-		if (lead < text.length && marks.dashes.indexOf(text[lead]) !== -1) return wsDashDialogue(text, lead, marks.dashes, marks.verbs);
+		if (lead < text.length && marks.dashes.indexOf(text[lead]) !== -1) {
+			const source = text.slice(0, lead).indexOf('>') !== -1 && !/[.!?\u2026][\s\u00a0]*$/.test(text) && WS_ATTRIBUTION.test(text.slice(lead + 1));
+			if (!source) return wsDashDialogue(text, lead, marks.dashes, marks);
+		}
 	}
 	// Openers mapped to what may close them. Curly pairs are strict;
 	// straight marks close on themselves.

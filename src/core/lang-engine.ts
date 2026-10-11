@@ -456,7 +456,18 @@ function wsBuildPackEngine(pack: WsPack): WsEngine {
 	for (let i = 0; i + 1 < oq.length; i += 2) pairs[oq[i]] = oq[i + 1];
 	const dashes = String(pack.props['dialogue-dash'] || '').replace(/\s+/g, '');
 	// …and its speech verbs, which end a speech with no second dash after them (A622)
-	const dialogue: WsDialogueMarks | null = (Object.keys(pairs).length || dashes) ? { pairs, dashes, verbs: L('speech verbs').map(wsLower) } : null;
+	// …and, in a pack that names what its narrator goes on with after a tag's comma (French),
+	// that list, with the pack's other words, abbreviations and sentence ends: the speech
+	// picks up again after the tag
+	const afterTag = L('after speech tag').map((e) => wsLower(e).split(/\s+/).filter(Boolean));
+	const resumes = afterTag.length > 0;
+	const dialogue: WsDialogueMarks | null = (Object.keys(pairs).length || dashes) ? {
+		pairs, dashes, verbs: L('speech verbs').map(wsLower),
+		after: resumes ? afterTag : undefined,
+		known: resumes ? ['adverbs', 'prepositions', 'conjunctions', 'nouns', 'numbers'].flatMap((k) => L(k)).map(wsLower) : undefined,
+		abbr: resumes ? [...abbr] : undefined,
+		stops: resumes ? ends : undefined,
+	} : null;
 	// …and the doubles and guillemets among them hold a quotation opened partway through a sentence whole (A642);
 	// a single quote can be the apostrophe
 	const held: Record<string, string> = { '"': '"' };

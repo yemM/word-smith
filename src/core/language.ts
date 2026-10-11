@@ -57,7 +57,7 @@ export const WS_PACK_PARTS: Record<string, 'list' | 'table' | 'keyed' | 'text' |
 	'endings': 'table', 'context': 'keyed', 'inflections': 'list', 'elisions': 'list', 'numbers': 'list', 'units': 'list',
 	// the prose checks' words
 	'filler words': 'list', 'soft filler': 'list', 'hedges': 'list', 'misused': 'table',
-	'passive': 'keyed', 'speech verbs': 'list', 'repetition ignore': 'list',
+	'passive': 'keyed', 'speech verbs': 'list', 'after speech tag': 'list', 'repetition ignore': 'list',
 	// sentences, and the reading grade
 	'abbreviations': 'list', 'readability': 'keyed', 'common characters': 'list', 'loose pronouns': 'list',
 	// what the reader marks up, and what the gate expects the engine to find in it

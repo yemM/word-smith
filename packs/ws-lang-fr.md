@@ -5,7 +5,7 @@ Add words under any heading, comma separated or one per line. Keep the English n
 ## À propos (About)
 - language: fr
 - name: Français
-- pack: 1.0
+- pack: 1.1
 - format: 1
 - words: spaces
 - sentence-end: . ! ? …
@@ -508,6 +508,11 @@ Add words under any heading, comma separated or one per line. Keep the English n
 - affirma, indiqua, précisa, souligna, estima, assura, confia, rappela, conclut, insista, glissa, nota, admit, reconnut, avoua, gronda, grogna, ricana, bredouilla, balbutia, grommela, répéta, continua, ordonna, supplia, plaisanta, trancha, coupa, s’étonna, s’emporta
 - déclaré, affirmé, indiqué, expliqué, précisé, ajouté, souligné, estimé, assuré, annoncé, confié, rappelé, raconté, demandé, répondu, répliqué, insisté, poursuivi, conclu, lancé, martelé, commenté, reconnu, admis, avoué, noté, observé, remarqué, dénoncé, regretté, résumé, confirmé, interrogé, rétorqué, murmuré, chuchoté, crié, hurlé, soupiré, protesté, soufflé, glissé, tranché
 - déclare, affirme, explique, précise, ajoute, souligne, estime, assure, indique, répond, demande, raconte, insiste, poursuit, conclut, confie, rappelle, lance, souffle, glisse, observe, reconnaît, admet, avoue, murmure, crie, s’écrie, s’exclame, répète, reprend, commente, tranche, martèle
+- s’enquit, s’enquiert, constata, constate, s’inquiéta, s’inquiète, sursauta, sourit, bâilla, s’interposa, s’étrangla, pouffa, informa, intima, rit, gémit, sanglota, haleta, marmonna, maugréa, susurra, objecta, renchérit, enchaîna, acquiesça, approuva, suggéra, proposa, conseilla, rassura, encouragea, avertit, prévint, menaça, implora, s’esclaffa, s’énerva, s’agaça, s’indigna, s’impatienta, s’excusa, justifia, ironisa, railla, tempêta, rugit, siffla, tonna, lâcha, cracha, s’amusa, s’enthousiasma, nuança, corrigea, compléta, hasarda, risqua, croassa, commença, termina, finit
+
+## Après l’incise (After speech tag)
+- comme, tout en, en …ant, en se …ant, en le …ant, en la …ant, en les …ant, en lui …ant, en leur …ant, en me …ant, en te …ant, en nous …ant, en vous …ant
+- …ant, …ante, …ants, …antes, plein, pleine, pleins, pleines, avec, sans, puis, d’un, d’une, l’air, les yeux, la voix, le regard, la main, avant de, après avoir, après être, pour lui-même, pour elle-même
 
 ## Pronoms ambigus (Loose pronouns)
 - ce, c’, cela, ça, ceci, celui-ci, celle-ci, ceux-ci, celles-ci
