@@ -35,7 +35,7 @@ const m = new Module(path.join(ROOT, 'lang-test.js'));
 m.paths = Module._nodeModulePaths(ROOT);
 m._compile(built.outputFiles[0].text, path.join(ROOT, 'lang-test.js'));
 const P = m.exports;
-const { LANG_EN: EN } = P;
+const { LANG_EN: EN, LANG_FR: FR } = P;
 
 // No lookbehind anywhere in the source: iOS before 16.4 cannot parse it, and
 // the whole plugin fails to load. The smoke test asks the release build; this
@@ -139,6 +139,87 @@ is('lang: [fr, en]', P.wsLanguageCode(['fr', 'en']), 'fr');
 is('lang: de', P.wsLanguageCode('de'), 'de');
 is('an empty lang: says nothing', [P.wsLanguageCode(''), P.wsLanguageCode(null), P.wsLanguageCode('  '), P.wsLanguageCode([])], [null, null, null, null]);
 is('lang: is a name, not a sentence', P.wsLanguageCode('fr # draft'), null);
+
+// ── French: the tagger ──────────────────────────────────────────────────
+is('FR elisions split', FR.tokenize("L'homme qu'il aimait jusqu'à l'aube").map((t) => t.w),
+	["L'", 'homme', "qu'", 'il', 'aimait', "jusqu'", 'à', "l'", 'aube']);
+is('FR aujourd\'hui stays whole', FR.tokenize("aujourd'hui").map((t) => t.w), ["aujourd'hui"]);
+is('FR -ment adverbs, imperfect', tags(FR, 'Il regardait lentement la mer.'),
+	'Il/PRON regardait/VERB lentement/ADV la/DET mer/NOUN');
+is('FR object pronoun after a subject', tags(FR, 'Je la vois chaque matin.'),
+	'Je/PRON la/PRON vois/VERB chaque/DET matin/NOUN');
+is('FR object pronoun after a name', tags(FR, "Johan l'observait."), "Johan/NOUN l'/PRON observait/VERB");
+is('FR adjective after its noun', tags(FR, 'La maison rouge.'), 'La/DET maison/NOUN rouge/ADJ');
+is('FR verb after its noun, before que', tags(FR, 'Ce chapitre montre que'),
+	'Ce/DET chapitre/NOUN montre/VERB que/CONJ');
+is('FR passé simple, reflexive', tags(FR, 'Elle se dirigea vers la porte.'),
+	'Elle/PRON se/PRON dirigea/VERB vers/PREP la/DET porte/NOUN');
+is('FR gerund and present participle', tags(FR, 'En marchant, savourant le soir.'),
+	'En/PREP marchant/VERB savourant/VERB le/DET soir/NOUN');
+is('FR auxiliary and participle', tags(FR, 'Le livre a été écrit.'),
+	'Le/DET livre/NOUN a/AUX été/AUX écrit/VERB');
+
+// ── French: the checks ──────────────────────────────────────────────────
+{
+	const p = (line) => spans(line, FR.findPassive(run(FR, line)));
+	is('FR passive', p('La porte fut ouverte par le gardien.'), ['fut ouverte']);
+	is('FR passive through avoir été', p('Le livre a été écrit par un inconnu.'), ['a été écrit']);
+	is('FR être verbs are not passive', p('Il est parti tôt ; elle est arrivée tard.'), []);
+	is('FR reflexives are not passive', p("Elle s'est levée, nous nous sommes vus."), []);
+	is('FR states without an agent are not passive', p('Il était très fatigué.'), []);
+	is('FR an adjective is no participle', p('Tout est flou.'), []);
+
+	const mis = (line) => spans(line, FR.findMisused(run(FR, line)));
+	is('FR a / à', mis('Il à mangé a la cantine.'), ['à', 'a']);
+	is('FR ou / où', mis("D'ou vient-il ? Le jour ou il pleuvait."), ['ou', 'ou']);
+	is('FR "un jour ou l\'autre" is right', mis("Un jour ou l'autre, il comprendra."), []);
+	is('FR leur / leurs', mis('Ils parlent de leur enfants.'), ['leur enfants']);
+	is('FR "leur fils" is singular', mis('Ils parlent de leur fils.'), []);
+	is('FR si + conditional', mis("Si j'aurais su, je serais venu."), ["Si j'aurais"]);
+	is('FR "si" in an indirect question is right', mis('Je me demande si elle viendrait.'), []);
+	is('FR sa / ça', mis('Sa va bien.'), ['Sa']);
+	is('FR se rappeler de', mis('Il ne peut se rappeler du voyage.'), ['rappeler du']);
+	is('FR "de se lever" is right', mis('Il tenta de se lever.'), []);
+	for (const line of ['Il était là, homme parmi les hommes.', "C'est ça, homme de peu de foi.", 'Quels sont tes projets ?',
+		'Quelles sont les raisons ?', 'Les enfants en ont assez.', 'Mes amis y ont cru.']) is('FR right as it is: ' + line, mis(line), []);
+	is('FR son / sont, leur / leurs after a subject', mis('Ils son partis. Je leurs dis.'), ['son', 'leurs']);
+	is('FR "qui son" before a noun is right', mis("L'homme à qui son frère écrit."), []);
+	is('FR "sauf" is a preposition', tags(FR, 'Tous sauf toi.'), 'Tous/DET sauf/PREP toi/PRON');
+	is("FR presqu'île is one word", FR.tokenize("La presqu'île.").map((t) => t.w), ['La', "presqu'île"]);
+
+	const ill = (line) => spans(line, FR.findIllusions(run(FR, line)));
+	is('FR doubled word', ill('Ce chapitre montre que le le problème persiste.'), ['le le']);
+	is('FR "nous nous" is grammar', ill('Nous nous sommes vus.'), []);
+	is('FR a stammer is a voice', ill('Je… je suis désolé. Oui, oui.'), []);
+
+	const fill = 'En fait, il faut dire que le fait que tout soit un peu flou gêne vraiment.';
+	is('FR filler phrases', spans(fill, FR.findFillerPhrases(fill)), ['En fait', 'il faut dire que', 'le fait que', 'un peu']);
+	is('FR filler phrases need a word edge', FR.findFillerPhrases('un peuplier'), []);
+	is('FR filler words', run(FR, fill).filter((t) => FR.fillerStrong.has(t.lw)).map((t) => t.w), ['vraiment']);
+
+	const vague = (line) => { const t = run(FR, line); return t.filter((x, i) => FR.isVaguePronoun(x, t[i + 1])).map((x) => x.w); };
+	is('FR loose pronouns', vague('Cela ne change rien. Ce chapitre est court. Ils partent.'), ['Cela', 'Ils']);
+}
+
+// ── French: readability and the Report ─────────────────────────────────
+is('FR syllables', ['chat', 'maison', 'heureuse', 'idée', 'réaliser', 'naïf', 'lentement'].map(FR.countSyllables), [1, 2, 2, 2, 4, 2, 3]);
+is('FR grade rises with long words', FR.grade(20, 1, 40) > FR.grade(20, 1, 24), true);
+is('FR grade rises with long sentences', FR.grade(40, 1, 60) > FR.grade(10, 1, 15), true);
+is('FR words for the Report', FR.splitWord("l'homme"), ["l'", 'homme']);
+is('FR common words set aside', ['le', "l'", 'est', 'homme'].map((w) => FR.reportStopwords.has(w)), [true, true, true, false]);
+
+// ── French: which notes are French ─────────────────────────────────────
+// Les Misérables, out of copyright (Project Gutenberg).
+const HUGO = "Mgr Bienvenu était pauvre; sa sœur, mademoiselle Baptistine, était douce et sa servante, madame Magloire, le craignait un peu. Il avait l'habitude de marcher seul dans la campagne, et l'on disait de lui qu'il n'avait pas d'argent parce qu'il donnait tout.";
+is('detect fr', P.wsDetectLanguage(HUGO), 'fr');
+is('read fr with its pack', (P.wsResolveLanguage(HUGO, 'auto') || {}).code, 'fr');
+is('a short French line', P.wsDetectLanguage('Je ne sais pas.'), 'fr');
+is('a French title in an English note', P.wsDetectLanguage('Notes on Le Petit Prince'), 'en');
+is('the limit: a French line with one marker reads as English', P.wsDetectLanguage('Il pleut.'), 'en');
+is('the setting wins over Auto, in French too', (P.wsResolveLanguage(HUGO, 'en') || {}).code, 'en');
+is('lang: fr-FR', P.wsLanguageCode('fr-FR'), 'fr');
+is('lang: French', P.wsLanguageCode('French'), 'fr');
+is('lang: Française', P.wsLanguageCode('Française'), 'fr');
 
 console.log(pass + ' passed, ' + fail + ' failed  (language packs)');
 if (fail) process.exit(1);

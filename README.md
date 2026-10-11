@@ -164,7 +164,7 @@ Read more about [history and the report](docs/history-and-report.md).
 
 ### And the rest
 
-[Prose checks and parts-of-speech coloring](docs/syntax-and-prose.md). Nouns, verbs and adjectives in color, the way a code editor shows you structure. Too many adverbs reads as a rash(Thank you, Mr. Stephen King!).
+[Prose checks and parts-of-speech coloring](docs/syntax-and-prose.md). Nouns, verbs and adjectives in color, the way a code editor shows you structure. Too many adverbs reads as a rash(Thank you, Mr. Stephen King!). In English and French, picked per note.
 
 Filler words, passive voice and doubled words get an underline. 
 

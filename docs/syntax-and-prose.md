@@ -6,17 +6,21 @@
 
 **Prose checks** mark eight things worth a second look: filler words, passive voice, doubled words, easily confused pairs, vague pronouns, dialogue tags, sentence rhythm, and repeated uncommon words. Each check has its own switch and its own color. Marks are an underline by default, or a highlight, or colored text.
 
-Both run on your machine. Both are guesswork. A mark is a nudge, not a verdict. Both read English. A note in another language they recognise gets no marks rather than wrong ones (see [Languages](#languages)).
+Both run on your machine. Both are guesswork. A mark is a nudge, not a verdict. Both read English and French. A note in another language they recognise gets no marks rather than wrong ones (see [Languages](#languages)).
 
 ## Languages
 
 Each note is read in one language, which is chosen in this order:
 
-1. **`lang:` in the note's properties** (or `ws-lang:`, which wins if both are there). `lang: en`, `lang: en-GB` and `lang: English` all work. This decides for that note, whatever the setting says. A language the plugin has no rules for (`lang: de`) leaves the note unmarked.
+1. **`lang:` in the note's properties** (or `ws-lang:`, which wins if both are there). `lang: fr`, `lang: fr-FR`, `lang: French`, `lang: français` and `lang: en` all work. This decides for that note, whatever the setting says. A language the plugin has no rules for (`lang: de`) leaves the note unmarked.
 2. **The Language setting** (Settings → Prose), when it names a language.
-3. **Auto**, the default. The plugin counts the short common words at the start of the note (*the, and, of*). It also knows the common words of Spanish, Italian, Portuguese, German, Dutch and Russian. A note with a few of those is recognised and left unmarked, instead of being read with English rules. A note with none of these words, or only one or two, is read as English, as before. Other languages are read as English too, so give their notes a `lang:`.
+3. **Auto**, the default. The plugin counts the short common words at the start of the note (*the, and, of* against *le, les, et, est*) and picks the language they belong to. It also knows the common words of Spanish, Italian, Portuguese, German, Dutch and Russian. A note with a few of those is recognised and left unmarked, instead of being read with English rules. A note with none of these words, a single French one (*Notes on Le Petit Prince*), or one or two of a language with no pack, is read as English, as before. So a French note of a line or two may be read as English until more of it is written; `lang: fr`, in a template for instance, settles it from the first word. Other languages are read as English too, so give their notes a `lang:`.
 
 The language decides which words count as filler, which constructions are passive, which pairs are easily confused, which pronouns are loose, which words are too common for the repetition radar and the Report's word list, and how syllables and readability are counted.
+
+**In French**, elisions are split before tagging: *l'homme* is the article and the noun. Adverbs are mostly found by *-ment*, the imperfect by *-ait*, and the infinitive by *-er*. *Le*, *la* and *les* before a verb are taken as pronouns (*je la vois*). The passive check leaves verbs conjugated with *être* (*elle est partie*) and reflexives (*elle s'est levée*) alone. The confused pairs are *a/à*, *ou/où*, *et/est*, *son/sont*, *on/ont*, *ce/se*, *ses/ces*, *la/là*, *quand/quant*, *leur/leurs*, *peu/peut* and *sa/ça*, plus *si j'aurais*, *se rappeler de* and *pallier à*. Each is matched in context, so correct uses stay clear. Loose pronouns are *cela*, *ça*, *ceci*, *ce* and *ils/elles* opening a sentence. *Il* and *elle* are left out, because in French they name a character as often as a thing. Readability uses Kandel and Moles's French version of Flesch reading ease, converted to the same grade scale, so the rhythm thresholds mean the same thing in both languages.
+
+**Adding a language** takes one file and one line: see [Adding a language](adding-a-language.md).
 
 ## How the tagger works
 
@@ -32,4 +36,6 @@ Results are drawn as editor decorations, so they never flicker while you type. T
 
 ## What it gets wrong
 
-Roughly nine words in ten on ordinary prose, in my own testing, not benchmarked against a tagged corpus. Weakest on dialogue-heavy fiction, fragments, and unusual proper nouns. That's why it's a writing aid and not a grammar checker.
+Roughly nine words in ten on ordinary English prose, in my own testing, not benchmarked against a tagged corpus. Weakest on dialogue-heavy fiction, fragments, and unusual proper nouns. That's why it's a writing aid and not a grammar checker.
+
+French is newer and has the same kind of weak spots. The present tense of *-er* verbs (*il regarde*) has the same form as many nouns and adjectives. It is read from context: after a subject it is a verb, after a noun an adjective, unless an article or *que* follows. That context is sometimes wrong.

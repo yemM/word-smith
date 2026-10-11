@@ -21,11 +21,13 @@
 
 import type { WsLanguage } from './common';
 import { LANG_EN } from './en';
+import { LANG_FR, frSplitElision } from './fr';
 
 export * from './common';
 export * from './en';
+export { LANG_FR, frSplitElision };
 
-export const WS_LANGUAGES: readonly WsLanguage[] = [LANG_EN];
+export const WS_LANGUAGES: readonly WsLanguage[] = [LANG_EN, LANG_FR];
 
 export function wsLanguageByCode(code: string | null | undefined) {
 	const c = String(code || '').toLowerCase();
