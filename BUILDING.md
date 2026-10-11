@@ -14,6 +14,9 @@ src/
                           checked at load
     global.d.ts           typing gaps the compiler cannot know
     obsidian-private.d.ts the private API's shape, as used here
+    lang/                 the prose analysis, one language pack per file:
+                          common.ts (the shared parts), en.ts, and
+                          index.ts (the list of packs)
   plugin/
     plugin.ts             the plugin class: lifecycle, settings, commands
     bar.ts, menu.ts, themes.ts, paint.ts, focus.ts, stores.ts, history.ts,
@@ -32,7 +35,9 @@ src/
                           files, flags, journal, keys, lens, mode, nav, props,
                           readings, rename, rows, scope, sel, shape, ticks,
                           widths, writes, zoom)
-test/smoke.js             the smoke test over the built file (`npm test`)
+test/lang.js              the language packs, from the source (`npm test`)
+test/smoke.js             the smoke test over the built file (`npm test`,
+                          after `npm run build`)
 ```
 
 ```
@@ -40,7 +45,7 @@ npm install
 npm run check     # tsc
 npm run lint      # the plugin review's rules (eslint-plugin-obsidianmd)
 npm run build     # main.js, and build/styles.css
-npm test          # the smoke test
+npm test          # the language packs, then the smoke test over main.js
 ```
 
 `src/` and `styles.css` are the source, edited by hand and commented at

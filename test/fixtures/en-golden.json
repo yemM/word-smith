@@ -1,0 +1,18 @@
+{
+	"from": "4570801",
+	"digests": {
+		"tags": "b256fa0b3a16b851",
+		"passive": "cd12810a1df93ae8",
+		"illusions": "a46acbf5a77bb8b5",
+		"misused": "69d8d484e8c98e27",
+		"vague": "27abf1c4b6ddf81a",
+		"filler": "0218f3d48deea0cd",
+		"phrases": "88f79f24b03742e4",
+		"sentences": "192e554689c2959b",
+		"syllables": "892ed2630f27c542",
+		"dialogue": "115d1ff6f7ce89e9",
+		"repetition": "294bd515995be3be",
+		"stopwords": "371d5d4cb52c66e9",
+		"grade": "84cd3c6d815574ce"
+	}
+}
