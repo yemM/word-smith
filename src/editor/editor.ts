@@ -10,7 +10,7 @@ import type { TransactionSpec } from '@codemirror/state';
 import { wsEditorExtensions } from './editor-extensions';
 import { WS_INTERNALS } from '../core/obsidian-internals';
 import { Platform } from 'obsidian';
-import { CM, TYPO_MAX_LOOKBACK, TYPO_OPENS_AFTER, TYPO_RULES, wsCatch, wsBag, wsVimOf, wsSentenceStart } from '../core/preamble';
+import { CM, TYPO_MAX_LOOKBACK, TYPO_OPENS_AFTER, TYPO_RULES, wsCatch, wsBag, wsVimOf, wsSentenceStart, wsFrenchSpacing, LANG_FR } from '../core/preamble';
 import type WordSmith from '../plugin/plugin';
 
 export const editorMethods = {
@@ -130,6 +130,20 @@ export const editorMethods = {
 
 			const lookback = doc.sliceString(Math.max(line.from, from - TYPO_MAX_LOOKBACK), from);
 
+			// FRENCH SPACING: a narrow no-break space before ; ! ?, a no-break
+			// space before : and inside « », as French typesetting has it. The
+			// space a writer typed before the mark is taken into it, so "mot ?"
+			// and "mot?" both come out right. In notes read as French, or
+			// everywhere, as the setting says.
+			// Asked only for the few characters it changes, so a letter typed
+			// in "French notes" mode never pays for reading the note's language.
+			const french = /[;:!?"' <>\u00bb]/.test(text) && (s.typoFrench === 'always' ||
+				(s.typoFrench === 'auto' && this.proseLanguageOf(doc, this.editorViewFile(view)) === LANG_FR));
+			if (french && from === to) {
+				const fr = wsFrenchSpacing(before, text);
+				if (fr) { this.applyTypography(view, from, to, text, fr.matched, fr.glyph); return true; }
+			}
+
 			for (const rule of TYPO_RULES) {
 				if (!groupOn[rule.group]) continue;
 				if (rule.text.charAt(rule.text.length - 1) !== text) continue;
@@ -139,7 +153,16 @@ export const editorMethods = {
 					const preceding = lookback.charAt(lookback.length - prefix.length - 1);
 					if (preceding && rule.notAfter.test(preceding)) continue;
 				}
-				this.applyTypography(view, from, to, text, rule.text, rule.insert);
+				// << and >> give « and » their inner spaces too; a plain space
+				// typed before >> becomes the no-break one.
+				let insert = rule.insert, matched = rule.text;
+				if (french && insert === '\u00ab') insert = '\u00ab\u00a0';
+				if (french && insert === '\u00bb') {
+					const ahead = before.slice(0, before.length - prefix.length);
+					if (ahead.endsWith(' ')) { matched = ' ' + rule.text; insert = '\u00a0\u00bb'; }
+					else if (!/[\u00a0\u202f]$/.test(ahead)) insert = '\u00a0\u00bb';
+				}
+				this.applyTypography(view, from, to, text, matched, insert);
 				return true;
 			}
 
@@ -153,19 +176,23 @@ export const editorMethods = {
 				// the keystroke moves past it instead of inserting.
 				// Checked before anything else, because it is the one case
 				// where the right answer is to add nothing at all.
+				// In French, " is « and » with their spaces inside.
+				const openD  = french ? '\u00ab\u00a0' : '\u201c';
+				const closeD = french ? '\u00a0\u00bb' : '\u201d';
 				if (from === to) {
-					const ahead = doc.sliceString(from, from + 1);
 					const cust  = s.typoCustomQuotes;
 					const at    = (k: string, f: string) => {
 						const v = cust ? wsBag(s)[k] : '';
 						return (typeof v === 'string' && v.length) ? v : f;
 					};
 					const closer = text === '"'
-						? at('typoCloseDouble', '\u201d')
+						? at('typoCloseDouble', closeD)
 						: at('typoCloseSingle', '\u2019');
+					// as long as the closer: French's is two characters
+					const ahead = doc.sliceString(from, from + closer.length);
 					if (ahead && ahead === closer) {
 						view.dispatch({
-							selection: { anchor: from + 1 },
+							selection: { anchor: from + closer.length },
 							userEvent: 'select.typography'
 						});
 						return true;
@@ -188,7 +215,7 @@ export const editorMethods = {
 				const inQuote = opens_ > closes_;
 				const midWord = /[\p{L}\p{N}]/u.test(prev) && !inQuote;
 				const glyph = text === '"'
-					? (opens ? pick('typoOpenDouble', '\u201c') : pick('typoCloseDouble', '\u201d'))
+					? (opens ? pick('typoOpenDouble', openD) : pick('typoCloseDouble', closeD))
 					: (opens ? openCh : midWord ? pick('typoApostrophe', '\u2019') : closeCh);
 				// IN PAIRS. An opening double quote brings its closer with
 				// it and leaves the caret between them, so the pair is
@@ -213,7 +240,7 @@ export const editorMethods = {
 				let tail = '';
 				if (opens) {
 					tail = text === '"'
-						? pick('typoCloseDouble', '\u201d')
+						? pick('typoCloseDouble', closeD)
 						: closeCh;
 				}
 				this.applyTypography(view, from, to, text, text, glyph, tail);

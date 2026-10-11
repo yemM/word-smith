@@ -2,7 +2,7 @@
 // migrations, the scope, the ribbon. The areas' methods are in their own
 // modules (see the class top).
 
-import { Plugin, MarkdownView, TFile, Menu, Modal, Notice, setIcon, Platform, addIcon } from 'obsidian';
+import { Plugin, MarkdownView, TFile, Menu, Modal, Notice, setIcon, Platform, addIcon, editorInfoField } from 'obsidian';
 import type { Command, Events, WorkspaceSidedock, WorkspaceMobileDrawer, WorkspaceLeaf, TAbstractFile } from 'obsidian';
 import type { EditorView } from '@codemirror/view';
 import type { Text as CmText } from '@codemirror/state';
@@ -36,8 +36,9 @@ import {
 	wsBag,
 	wsStr,
 	wsErrMsg,
+	wsLanguageCode,
 } from '../core/preamble';
-import type { WsSession } from '../core/preamble';
+import type { WsLanguage, WsSession } from '../core/preamble';
 import { WordSmithSettingTab } from './settings-tab';
 import { diagnosticsMethods } from './diagnostics';
 import type { DiagnosticsMethods } from './diagnostics';
@@ -150,6 +151,7 @@ function wsFieldsReset(plugin: WordSmith) {
 	plugin._statusRowEls    = [];     // per-row elements, for per-row text fitting
 	plugin._goalWasMet      = null;   // previous goal state, to fire the celebration once
 	plugin._fenceCache      = null;   // { doc, set } of non-prose line numbers
+	plugin._langCache       = null;   // { doc, setting, lang } the language a note is read in
 	plugin._paraCache       = null;   // { doc, val } paragraph geometry
 	plugin._lastTypo        = null;   // last typography substitution, for backspace-to-revert
 	plugin._barPicker       = null;   // open bar popup, if any
@@ -799,7 +801,11 @@ export function wsWireVault(plugin: WordSmith) {
 		plugin.treeOrderAdopt(file);
 	});
 	plugin.onAppEvent(plugin.app.metadataCache, 'changed', (file: TAbstractFile) => {
+		// A new `lang:` changes every mark in the note: repaint now rather
+		// than at the next keystroke.
+		const langWas = plugin.proseLanguageSetting(file);
 		if (plugin._fmCache && file && file.path) delete plugin._fmCache[file.path];
+		if (plugin.proseLanguageSetting(file) !== langWas) plugin.reconfigureEditors();
 		plugin._scopeGen++;
 		// {backlinks} caches a walk of the whole vault against this.
 		plugin._linkGen = (plugin._linkGen || 0) + 1;
@@ -1429,6 +1435,9 @@ export default class WordSmith extends Plugin {
 	declare countWords: ReportMethods["countWords"];
 	declare getDocStats: ReportMethods["getDocStats"];
 	declare getNonProseLines: ReportMethods["getNonProseLines"];
+	declare proseLanguageOf: ReportMethods["proseLanguageOf"];
+	declare proseLanguageOfText: ReportMethods["proseLanguageOfText"];
+	declare proseLanguageSetting: ReportMethods["proseLanguageSetting"];
 	declare getParagraphLines: ReportMethods["getParagraphLines"];
 	declare getParagraphInfo: ReportMethods["getParagraphInfo"];
 	declare activeFolderPath: ReportMethods["activeFolderPath"];
@@ -1747,6 +1756,7 @@ export default class WordSmith extends Plugin {
 	_exportPage: number;
 	_exportZoom: number | null;
 	_fenceCache: { doc: CmText; set: Set<unknown> } | null;
+	_langCache: { doc: CmText; setting: string; lang: WsLanguage | null } | null;
 	_fitPending: boolean;
 	_fitShortenFile: boolean;
 	_fitShortenHead: number;
@@ -1818,6 +1828,7 @@ export default class WordSmith extends Plugin {
 	_orgHistKey: (ev: KeyboardEvent) => void;
 	_orgIndex: WsOrgIndexMap;
 	_orgIndexBuild: Promise<WsOrgIndexMap> | null;
+	_orgIndexReadAll: boolean;
 	_orgIndexSubs: Set<() => void>;
 	_orgLens: () => { sort: WsLensSort | null; chips: WsLensChip[] };
 	_orgLensSet: (patch: { sort?: WsLensSort | null; chips?: WsLensChip[] }) => void;
@@ -3430,6 +3441,7 @@ export default class WordSmith extends Plugin {
 		// Both caches hold a reference to a CodeMirror document; drop them so
 		// a disabled plugin does not pin one.
 		this._fenceCache = null;
+		this._langCache = null;
 		this._paraCache = null;
 		this._docStatsCache = null;
 		if (this.maskResizeObserver) { this.maskResizeObserver.disconnect(); this.maskResizeObserver = null; }
@@ -3657,6 +3669,13 @@ export default class WordSmith extends Plugin {
 				if (!(key in fm)) continue;
 				if (isOn(fm[key]))       add(MAP[key], true);
 				else if (isOff(fm[key])) add(MAP[key], false);
+			}
+			// The note's language, by the key Pandoc and most tools read —
+			// `lang: fr` — or by Word-Smith's own, which wins. An empty one
+			// says nothing.
+			for (const key of ['lang', 'ws-lang']) {
+				const code = key in fm ? wsLanguageCode(fm[key]) : null;
+				if (code) add('proseLanguage', code);
 			}
 		}
 		this._fmCache[file.path] = out;
@@ -3949,6 +3968,17 @@ export default class WordSmith extends Plugin {
 			&& this.isFileInScope(this.getFileForEditorView(cmView));
 		cmView._wsScope = { gen: this._scopeGen, in: val };
 		return val;
+	}
+
+	// The note an editor shows, from Obsidian's own field on its state: no
+	// leaf walk on a keystroke, and already the new note when a tab opens
+	// another one. The walk only for an editor without the field.
+	editorViewFile(cmView: EditorView): TFile | null {
+		try {
+			const info = cmView.state.field(editorInfoField, false);
+			if (info) return info.file || null;
+		} catch (_) { wsCatch('editorViewFile: cmView.state.field(editorInfoField)', _); }
+		return this.getFileForEditorView(cmView);
 	}
 
 	// Called on every leaf/file change. Cheap when no limits are configured.

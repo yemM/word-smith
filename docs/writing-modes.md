@@ -49,6 +49,7 @@ ws-hemingway: true
 ws-syntax: true       # the word classes
 ws-checks: false      # the prose checks
 ws-typography: false
+lang: fr              # the language Syntax and the prose checks read it in
 ---
 ```
 
@@ -62,4 +63,4 @@ If Obsidian's Vim mode is on, Word-Smith stays out of its way and fills a few ga
 
 ## Right-to-left
 
-If Obsidian or the note is right-to-left, indents, padding and markers mirror. Word counting handles Hebrew, Arabic and Persian. Syntax coloring and prose checks are English only, and in another script they mark nothing rather than marking it wrongly.
+If Obsidian or the note is right-to-left, indents, padding and markers mirror. Word counting handles Hebrew, Arabic and Persian. Syntax coloring and prose checks read English and French (see [Languages](syntax-and-prose.md#languages)), and in another script they mark nothing rather than marking it wrongly.

@@ -72,6 +72,7 @@ import {
 	barPresetWithDefaults,
 	wsCatch,
 	wsFlagSvg,
+	wsLanguageOptions,
 	wsModKeyName,
 	wsSvgInto,
 } from '../core/preamble';
@@ -1719,6 +1720,8 @@ export class WordSmithSettingTab extends PluginSettingTab {
 				// one card, first, for both sections
 				this.noteRow('No AI, no API, nothing leaves your vault: word lists and regex rules. A mark is a nudge, not a verdict.'),
 				{ name: 'Skip code and math', desc: 'Leaves code, frontmatter and math alone, for Syntax and the prose checks.', control: { type: 'toggle', key: 'syntaxSkipCode' } },
+				{ name: 'Language', desc: 'Whose rules read your notes. Auto goes by each note’s own words, and lang: in a note’s properties decides for that note. A language not in this list is left unmarked.',
+					control: { type: 'dropdown', key: 'proseLanguage', options: wsLanguageOptions() } },
 				this.railRow('prose', RAIL),
 			], undefined, false),
 			this.section('Syntax', [
@@ -1744,9 +1747,9 @@ export class WordSmithSettingTab extends PluginSettingTab {
 				{ name: 'Minimum length', desc: 'Skips words shorter than this.', control: { type: 'slider', key: 'repetitionMinLength', min: 3, max: 10, step: 1 }, visible: all(ck, () => !!s.checkRepetition) },
 				cat('Commonly misused', 'Affect and effect, its and it’s, fewer and less.', 'checkMisused', 'checkMisusedColor', ck),
 				cat('Lexical illusions', 'The same word twice in a row.', 'checkIllusion', 'checkIllusionColor', ck),
-				cat('Dialogue', 'Everything inside quotes.', 'checkDialogue', 'checkDialogueColor', ck),
+				cat('Dialogue', 'Everything inside quotes, and replies opened by a dash, less the narrator’s words.', 'checkDialogue', 'checkDialogueColor', ck),
 				rendered({ name: 'Sentence rhythm', desc: 'Shades each sentence by how hard it reads: two tints, and the switch.', render: (st) => this.renderRhythm(st), visible: ck }, ['checkRhythm', 'checkRhythmHardColor', 'checkRhythmVeryHardColor']),
-				{ name: 'Hard above grade', desc: 'Flesch-Kincaid grade for the first tint.', control: { type: 'slider', key: 'checkRhythmHardGrade', min: 6, max: 16, step: 1 }, visible: all(ck, () => !!s.checkRhythm) },
+				{ name: 'Hard above grade', desc: 'Reading grade for the first tint: Flesch-Kincaid in English, each language’s own formula on the same scale.', control: { type: 'slider', key: 'checkRhythmHardGrade', min: 6, max: 16, step: 1 }, visible: all(ck, () => !!s.checkRhythm) },
 				{ name: 'Very hard above', desc: 'And for the second.', control: { type: 'slider', key: 'checkRhythmVeryHardGrade', min: 8, max: 22, step: 1 }, visible: all(ck, () => !!s.checkRhythm) },
 				{ name: 'Mute unmarked text', desc: 'Fades what you didn’t tick, so the marks stand out.', control: { type: 'toggle', key: 'checkDimOthers' }, visible: ck },
 				this.hotkeysRow(['toggle-prose-checks']),
@@ -1804,6 +1807,8 @@ export class WordSmithSettingTab extends PluginSettingTab {
 				{ name: 'Arrows', desc: '-> →, <- ←, => ⇒', control: { type: 'toggle', key: 'typoArrows' }, visible: ty },
 				{ name: 'Comparisons', desc: '<= ≤, >= ≥, /= ≠', control: { type: 'toggle', key: 'typoComparisons' }, visible: ty },
 				{ name: 'Guillemets', desc: '<< « and >> »', control: { type: 'toggle', key: 'typoGuillemets' }, visible: ty },
+				{ name: 'French spacing', desc: 'A no-break space before ; : ! ? and inside « », and " typed as « ». In French notes only, or everywhere.',
+					control: { type: 'dropdown', key: 'typoFrench', options: { off: 'Off', auto: 'French notes', always: 'Everywhere' } }, visible: ty },
 				{ name: 'Fractions', desc: '1/2 ½, 3/4 ¾, and the rest.', control: { type: 'toggle', key: 'typoFractions' }, visible: ty },
 				{ name: 'Capitalize sentences', desc: 'The first letter of a sentence becomes a capital.', control: { type: 'toggle', key: 'typoCapitalize' }, visible: all(ty, () => !Platform.isMobile) },
 			], this.railed('text', 'typography')),
@@ -2123,6 +2128,14 @@ const AFTER: Record<string, (tab: WordSmithSettingTab, value: unknown) => void |
 		else tab.plugin.closeMenuPanel();
 	},
 	hemingwayEnabled: (tab) => { tab.plugin._hemSaid = false; },   // a lock should land now, not in 120 ms
+	// the Report's cached grades were measured in the old language, and so
+	// were the Organizer's
+	proseLanguage: (tab) => {
+		tab.plugin._langCache = null;
+		const cache = tab.plugin.wordCountCache;
+		if (cache) for (const k of [...cache.keys()]) if (String(k).startsWith('stats:')) cache.delete(k);
+		if (tab.plugin._orgIndex) void tab.plugin.orgIndexResweep(true);
+	},
 	paragraphNumbers: (tab) => { tab.plugin.reconfigureEditors(); },
 	layoutZenOnly: (tab) => { tab.plugin.reconfigureEditors(); },   // the numbers' decoration reads it when built
 	organizerOn: (tab) => { try { tab.plugin.refreshMenuPanelsNow(); } catch (_) { wsCatch('AFTER organizerOn: refreshMenuPanelsNow();', _); } },

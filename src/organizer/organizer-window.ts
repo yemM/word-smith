@@ -1696,15 +1696,23 @@ export const organizerWindowMethods = {
 	},
 
 	// One sweep, joined if one is running: the build promise is the one every
-	// caller waits on, and the bell rings when it lands.
-	orgIndexResweep(this: WordSmith) {
-		if (this._orgIndexBuild != null) return this._orgIndexBuild;
+	// caller waits on, and the bell rings when it lands. `all` reads every note
+	// again, fresh or not: what the counters say changed, not the notes.
+	// Asked mid-sweep, the full read runs once the sweep in hand lands.
+	orgIndexResweep(this: WordSmith, all = false) {
+		if (this._orgIndexBuild != null) {
+			if (all) this._orgIndexReadAll = true;
+			return this._orgIndexBuild;
+		}
 		this._orgIndexBuild = (async () => {
 			try {
-				const ix = await this.orgIndexSweep();
+				const ix = await this.orgIndexSweep(all);
 				this._orgIndexRing();
 				return ix;
-			} finally { this._orgIndexBuild = null; }
+			} finally {
+				this._orgIndexBuild = null;
+				if (this._orgIndexReadAll) { this._orgIndexReadAll = false; void this.orgIndexResweep(true); }
+			}
 		})();
 		return this._orgIndexBuild;
 	},
@@ -1748,7 +1756,7 @@ export const organizerWindowMethods = {
 	// or excluded by a membership change) — so the sweep leaves the index
 	// EXACTLY the counted vault, whatever happened while the plugin was
 	// off. Folds, panes and tabs do not exist down here.
-	async orgIndexSweep(this: WordSmith) {
+	async orgIndexSweep(this: WordSmith, all = false) {
 		const ix = this._orgIndex;
 		const files = (this.app.vault.getMarkdownFiles
 			&& this.app.vault.getMarkdownFiles()) || [];
@@ -1758,7 +1766,7 @@ export const organizerWindowMethods = {
 			if (!this.isFileCounted(f)) continue;
 			seen.add(f.path);
 			const mt = (f.stat && f.stat.mtime) || 0;
-			if (!wsOrgStale(ix, f.path, mt)) continue;
+			if (!all && !wsOrgStale(ix, f.path, mt)) continue;
 			try { await this.orgIndexRead(f); } catch (_) { wsCatch('orgIndexSweep: await this.orgIndexRead(f);', _); }
 		}
 		for (const p of Array.from(ix.keys())) {
@@ -1778,7 +1786,7 @@ export const organizerWindowMethods = {
 		// while its own read is in flight. What is not counted is not put,
 		// whoever asked.
 		if (!this.isFileCounted(f)) { wsOrgRemove(this._orgIndex, f.path); return null; }
-		const st = this.analyzeText(text);
+		const st = this.analyzeText(text, f);
 		const tk = this.countTasks(text);
 		let props = null;
 		try {
