@@ -206,4 +206,87 @@ export interface WsLanguage {
 	 * the language's name in English and in itself ("french", "français").
 	 */
 	names: readonly string[];
+
+	/**
+	 * The speech on a line that opens with a dialogue dash, as spans: the
+	 * reply less the narrator's incises. `from` is where the dash is. Left
+	 * out, the incises are read the Spanish and Italian way, between two
+	 * dashes (dashPairDialogue). Null for a language that does not set
+	 * dialogue with dashes: in English, "— Robert Frost" is an attribution.
+	 */
+	dialogue?: ((text: string, from: number) => WsSpan[]) | null;
+}
+
+// ── Dialogue opened by a dash ────────────────────────────────────────────────
+
+// A line opening with a dash is a reply, in the languages that set dialogue
+// that way, a paragraph per reply and no quote marks: French, Spanish,
+// Italian, Portuguese, Russian. A quote block's ">" may come first.
+export const DIALOGUE_DASH = /^([\s>]*)[\u2014\u2015\u2013][\s\u00a0\u202f]*(?=[^\s\u2014\u2015\u2013-])/u;
+export const DIALOGUE_SPACE = /[\s\u00a0\u202f]/;
+
+// Trailing spaces off a span's end.
+export function trimSpanEnd(text: string, to: number) {
+	while (to > 0 && DIALOGUE_SPACE.test(text.charAt(to - 1))) to--;
+	return to;
+}
+
+// The incise between two dashes: "—Yo sé quién soy —respondió don Quijote—;
+// y sé que puedo", "— Me lo merito — disse allora fra sè. — Dovevo". A dash
+// with a space before it opens the narrator's words, the next dash hands back
+// to the speaker, and an incise left open runs to the end of the line. The
+// default for every language without its own rule.
+export function dashPairDialogue(text: string, from: number) {
+	const out: WsSpan[] = [];
+	let start = from;
+	// past the opening dash, so it is not read as the first incise
+	let i = from + 1;
+	while (i < text.length) {
+		const ch = text.charAt(i);
+		if ((ch === '\u2014' || ch === '\u2015' || ch === '\u2013') && DIALOGUE_SPACE.test(text.charAt(i - 1))) {
+			const to = trimSpanEnd(text, i);
+			if (to > start) out.push({ from: start, to });
+			let close = -1;
+			for (let k = i + 1; k < text.length; k++) {
+				const c = text.charAt(k);
+				if (c === '\u2014' || c === '\u2015' || c === '\u2013') { close = k; break; }
+			}
+			if (close === -1) return out;
+			// the speech picks up past the closing dash and its punctuation
+			start = close + 1;
+			while (start < text.length && /[\s\u00a0\u202f.,;:]/.test(text.charAt(start))) start++;
+			i = start;
+			continue;
+		}
+		i++;
+	}
+	const to = trimSpanEnd(text, text.length);
+	if (to > start) out.push({ from: start, to });
+	return out;
+}
+
+// An epigraph's source, in the quote block that holds the epigraph: names
+// and titles in capitals, the small words between them, initials, a year,
+// and no closing stop — "> — Victor Hugo, Les Misérables, 1862". A reply
+// has a word in lower case ("— Tu es là") or ends on its punctuation
+// ("— Merci, Hugo."), and outside a quote block a dash line is always one.
+const ATTRIBUTION = /^[\p{Lu}\d][\p{L}\d'\u2019-]*\.?(?:[\s\u00a0,]+(?:[\p{Lu}\d][\p{L}\d'\u2019-]*\.?|de|du|des|d'|la|le|les|von|van|der|di|da|del|y|e|et|and|of|the|in))+[\s\u00a0]*$/u;
+const CLOSING_STOP = /[.!?\u2026][\s\u00a0]*$/;
+
+/**
+ * The speech on a line that opens with a dialogue dash, or null when the line
+ * does not open with one, opens an attribution, or `lang` does not set
+ * dialogue that way. `lang` reads the incises its own way when it has a rule
+ * for them; the dash-pair reading is the default, and the reading for a
+ * language with no pack.
+ */
+export function findDashDialogue(line: string, lang: WsLanguage | null) {
+	if (lang && lang.dialogue === null) return null;
+	const text = String(line || '');
+	const open = DIALOGUE_DASH.exec(text);
+	if (!open) return null;
+	const from = open[1].length;
+	const rest = text.slice(open[0].length);
+	if (open[1].indexOf('>') >= 0 && !CLOSING_STOP.test(rest) && ATTRIBUTION.test(rest)) return null;
+	return lang && lang.dialogue ? lang.dialogue(text, from) : dashPairDialogue(text, from);
 }

@@ -221,5 +221,45 @@ is('lang: fr-FR', P.wsLanguageCode('fr-FR'), 'fr');
 is('lang: French', P.wsLanguageCode('French'), 'fr');
 is('lang: Française', P.wsLanguageCode('Française'), 'fr');
 
+// ── Dialogue opened by a dash ──────────────────────────────────────────
+const dlg = (line, lang) => P.findDialogue(line, lang).map((s) => line.slice(s.from, s.to));
+// French incises, the French pack's own reading
+is('dash dialogue: the whole reply', dlg('— À demain Johan.', FR), ['— À demain Johan.']);
+is('dash dialogue: en dash too, and in a quote block', dlg('> – Tu viens ?', FR), ['– Tu viens ?']);
+is('FR incise ending the line', dlg('— Tu ne viens pas ? demanda-t-elle, déconcertée.', FR), ['— Tu ne viens pas ?']);
+is('FR incise with a name', dlg("— Tu es sûr ? s'enquit Lucie, il est déjà tard.", FR), ['— Tu es sûr ?', 'il est déjà tard.']);
+is('FR speech goes on after the comma', dlg('— La course est stable, constata Lucie, les canons sont prêts.', FR), ['— La course est stable,', 'les canons sont prêts.']);
+is('FR speech goes on after the full stop', dlg("— On doit tenter l'expérience, coupa-t-il, vibrant. Ça va marcher.", FR), ["— On doit tenter l'expérience,", 'Ça va marcher.']);
+is('FR a word after the comma is the narrator\'s', dlg('— Lui-même, soupira-t-il, essoufflé.', FR), ['— Lui-même,']);
+is('FR a participle after the comma is the narrator\'s', dlg('— Et son enfant ? dit la sœur, osant à peine parler.', FR), ['— Et son enfant ?']);
+is('FR "comme…" after the comma is the narrator\'s', dlg('— Vingt lits! dit-il, comme se parlant à lui-même.', FR), ['— Vingt lits!']);
+is('FR an auxiliary is no incise', dlg('— Si un père de famille, a ses fils au loin, que fait-il ?', FR), ['— Si un père de famille, a ses fils au loin, que fait-il ?']);
+is('FR "mais" is no incise', dlg('— Oui, mais la porte est fermée.', FR), ['— Oui, mais la porte est fermée.']);
+is('FR an inverted question is no incise', dlg('— Bon, vient-il ?', FR), ['— Bon, vient-il ?']);
+is('FR "reconnaissez-vous" is the speaker asking', dlg('— Monsieur, reconnaissez-vous ce tatouage ?', FR), ['— Monsieur, reconnaissez-vous ce tatouage ?']);
+// Incises between dashes, the reading of a language with no pack (null)
+is('ES incise between dashes', dlg('— Yo sé quién soy —respondió don Quijote—; y sé que puedo ser no sólo los que he dicho.', null),
+	['— Yo sé quién soy', 'y sé que puedo ser no sólo los que he dicho.']);
+is('ES incise left open', dlg('— Como haya muchas truchuelas —respondió don Quijote.', null), ['— Como haya muchas truchuelas']);
+is('IT incise between spaced dashes', dlg('— Me lo merito — disse allora fra sè. — Dovevo pensarci prima!', null), ['— Me lo merito', 'Dovevo pensarci prima!']);
+is('a dash line with no incise', dlg('— Que é que você tem?', null), ['— Que é que você tem?']);
+is('a rule is not a reply', dlg('---', null), []);
+// English sets dialogue in quotes: a dash opens an attribution or a list,
+// with the pack and without one, as before languages.
+for (const line of ['— Ernest Hemingway', '> — Robert Frost', '—and then she was gone.', '– first item']) {
+	is('EN a dash is no reply: ' + line, [dlg(line), dlg(line, EN)], [[], []]);
+}
+// An epigraph's source is no reply, in any language.
+is('an epigraph\'s source is no reply', [dlg('> — Victor Hugo, Les Misérables, 1862', FR), dlg('> — J. R. R. Tolkien', FR), dlg('> — Miguel de Cervantes', null)], [[], [], []]);
+for (const line of ['— Merci, Hugo.', '— Oui, Paul.', '— Non, Jean.', '— Bonjour, Monsieur Dupont.', '— Pardon, Madame.', "— D'accord, Marc.",
+	'— À Paris.', '— Demain, Paris.', '— Salut Max', '— Tu es là', '— Oui', '> — Merci, Hugo.']) {
+	is('a reply, not an attribution: ' + line, dlg(line, FR), [line.replace(/^> /, '')]);
+}
+// The limit of that rule: in a quote block, a reply without its stop reads as a source.
+is('a quoted reply without its stop', dlg('> — Oui, Paul', FR), []);
+is('quotes still work', dlg('Il dit « bonjour » puis partit.', FR), ['« bonjour »']);
+is('English quotes', dlg('He said \u201cNot now\u201d and left.'), ['\u201cNot now\u201d']);
+is('German quotes too', dlg('Er sagte: \u201eKomm her\u201c und ging.', null), ['\u201eKomm her\u201c']);
+
 console.log(pass + ' passed, ' + fail + ' failed  (language packs)');
 if (fail) process.exit(1);

@@ -1747,7 +1747,7 @@ export class WordSmithSettingTab extends PluginSettingTab {
 				{ name: 'Minimum length', desc: 'Skips words shorter than this.', control: { type: 'slider', key: 'repetitionMinLength', min: 3, max: 10, step: 1 }, visible: all(ck, () => !!s.checkRepetition) },
 				cat('Commonly misused', 'Affect and effect, its and it’s, fewer and less.', 'checkMisused', 'checkMisusedColor', ck),
 				cat('Lexical illusions', 'The same word twice in a row.', 'checkIllusion', 'checkIllusionColor', ck),
-				cat('Dialogue', 'Everything inside quotes.', 'checkDialogue', 'checkDialogueColor', ck),
+				cat('Dialogue', 'Everything inside quotes, and replies opened by a dash, less the narrator’s words.', 'checkDialogue', 'checkDialogueColor', ck),
 				rendered({ name: 'Sentence rhythm', desc: 'Shades each sentence by how hard it reads: two tints, and the switch.', render: (st) => this.renderRhythm(st), visible: ck }, ['checkRhythm', 'checkRhythmHardColor', 'checkRhythmVeryHardColor']),
 				{ name: 'Hard above grade', desc: 'Reading grade for the first tint: Flesch-Kincaid in English, each language’s own formula on the same scale.', control: { type: 'slider', key: 'checkRhythmHardGrade', min: 6, max: 16, step: 1 }, visible: all(ck, () => !!s.checkRhythm) },
 				{ name: 'Very hard above', desc: 'And for the second.', control: { type: 'slider', key: 'checkRhythmVeryHardGrade', min: 8, max: 22, step: 1 }, visible: all(ck, () => !!s.checkRhythm) },

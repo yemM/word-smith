@@ -854,4 +854,7 @@ export const LANG_EN: WsLanguage = {
 		you are this have not but what which would there their be been were
 		from at by an`.split(/\s+/).filter(Boolean)),
 	names: ['english', 'anglais', 'anglaise'],
+	// English sets dialogue in quote marks; a line opening with a dash is an
+	// attribution or a list ("— Robert Frost"), not a reply.
+	dialogue: null,
 };

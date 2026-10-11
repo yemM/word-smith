@@ -1015,6 +1015,8 @@ export const ARROW_STYLES: Record<string, { top: string; bottom: string }> = {
 // The prose analysis — tagger, checks, readability — lives in ./lang/, one
 // module per language. Re-exported here so every importer keeps its path.
 export * from './lang';
+import { LANG_EN, findDashDialogue } from './lang';
+import type { WsLanguage } from './lang';
 
 // ── Dialogue ────────────────────────────────────────────────────────────────
 //
@@ -1038,8 +1040,16 @@ export * from './lang';
 // opens each paragraph without closing the last), but a highlight that
 // leaks down the rest of the note because a writer typed one quote mark is
 // far worse than one that stops early. The line is the unit here.
-export function findDialogue(line: string) {
+//
+// A LINE OPENING WITH A DASH is a reply too, less the narrator's incises,
+// in the languages that set dialogue that way: see findDashDialogue in
+// ./lang/common.ts, and the pack's own `dialogue`. `lang` is the note's pack,
+// English when left out, as before languages; null for a language with no
+// pack, which reads a dash the Spanish way.
+export function findDialogue(line: string, lang: WsLanguage | null = LANG_EN) {
 	const text = String(line || '');
+	const dashed = findDashDialogue(text, lang);
+	if (dashed) return dashed;
 	const out = [];
 	// Openers mapped to what may close them. Curly pairs are strict;
 	// straight marks close on themselves.

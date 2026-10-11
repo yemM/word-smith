@@ -30,6 +30,8 @@ Most of a pack is word lists. The rest is a few rules.
 | `reportStopwords`, `splitWord` | The function words the Report's "Most used words" sets aside, and how it splits a word (optional). |
 | `splitSentences` | `splitSentencesWith(text, abbreviations)`, with the dotted words that don't end a sentence (*Sr.*, *Dra.*). |
 | `countSyllables`, `grade` | A syllable count and a readability formula. Return the result on the US grade scale, so the rhythm thresholds mean the same thing in every language. `fr.ts` converts a Flesch-style reading-ease score to grades; the same conversion works for Fernández Huerta (Spanish), Amstad (German) and Douma (Dutch). |
+| `dialogue` (optional) | How to read the narrator's incises in a reply that opens with a dash. Left out, the incise is read between two dashes, the Spanish and Italian way (`—Yo sé quién soy —respondió don Quijote—; y sé…`). French writes its incises without dashes (`— Oui, dit-il.`), so `fr.ts` has its own rule. `null` for a language that doesn't open replies with a dash: English sets `dialogue: null`, so `— Robert Frost` stays unmarked. |
+
 ## Testing it
 
 `npm test` runs `test/lang.js`. That test checks every pack in `WS_LANGUAGES` against the contract: the fields exist, tags come from the shared set, spans stay inside the line, the grade is a number, Auto recognises the pack's own markers, and `lang:` accepts its names. Your pack is checked as soon as it is listed.

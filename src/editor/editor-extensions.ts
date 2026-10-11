@@ -364,7 +364,7 @@ export function wsEditorExtensions(plugin: WordSmith, cm: NonNullable<typeof CM>
 					// throws, so turning Dialogue on switched every
 					// check and word-class colour off at once.
 					if (s.checkDialogue) {
-						for (const q of findDialogue(line.text)) {
+						for (const q of findDialogue(line.text, lang)) {
 							out.push(checkMark.dialogue.range(base + q.from, base + q.to));
 						}
 					}

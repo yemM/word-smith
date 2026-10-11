@@ -14,7 +14,7 @@
 // "qu'il" the conjunction and the pronoun, so neither hides the other.
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { findIllusionsWith, findRepetitionsWith, splitSentencesWith, SENT_END, tokenizeLine } from './common';
+import { DIALOGUE_SPACE, findIllusionsWith, findRepetitionsWith, splitSentencesWith, SENT_END, tokenizeLine, trimSpanEnd } from './common';
 import type { WsLanguage, WsSpan, WsToken } from './common';
 
 const words = (s: string) => s.split(/\s+/).filter(Boolean);
@@ -784,6 +784,80 @@ const FR_REPETITION = {
 // "nous nous sommes vus", "vous vous trompez": grammar, not a slip.
 const DOUBLES = new Set(['nous', 'vous']);
 
+// ── Dialogue ────────────────────────────────────────────────────────────────
+
+// A reply opened by a dash ("— À demain, Johan.") runs to the end of the
+// line, less its incises: the narrator's "dit-il" or "soupira Johan" in the
+// middle of a reply is not dialogue, and marking it as such paints the whole
+// paragraph. French sets no dash around an incise, as Spanish does, so the
+// default reading cannot find them.
+// An incise is a verb of saying after a comma, a question or exclamation mark
+// or an ellipsis, with its subject after it: inverted ("dit-il",
+// "répondit-elle", "lança-t-il"), or a name, a pronoun or a possessive
+// ("s'enquit Lucie", "répondit sa mère"). Third person only: in
+// "reconnaissez-vous ce tatouage ?" the speaker is asking. The incise runs to
+// the next comma or the end of its sentence, and the speech goes on after it
+// ("coupa-t-il. Ça va marcher."). What follows the comma may still be the
+// narrator's: a word or two ("soupira-t-il, essoufflé."), a participle
+// ("dit la sœur, osant à peine…"), "comme…", "puis…".
+const DIALOGUE_INCISE = /[,?!\u2026][\s\u00a0\u202f]+((?:[sml]['\u2019])?(\p{Ll}+)(?:(?:-t)?-(?:il|elle|on|ils|elles)(?![\p{L}])|[\s\u00a0]+(?:\p{Lu}|(?:il|elle|on|ils|elles|sa|son|ses|leur|leurs|le|la|les|l['\u2019]|un|une)[\s\u00a0])))/gu;
+// What the narrator says after an incise's comma, about the speaker rather
+// than for them: "dit-il, comme se parlant à lui-même", "en souriant".
+const NARRATION_GOES_ON = /^(comme|tout en|en \p{L}+ant|(?!(?:maint|av|pend|cepend|dev|dur|aut|t|qu)ant)\p{L}+ant|avec|sans|d'un|d'une|l'air|les yeux|la voix|le regard|puis)(?![\p{L}'])/iu;
+// A word or two, and the end of the line: what is left after an incise's comma
+// when the narrator has not handed back to the speaker.
+const DIALOGUE_TAIL = /^\S+(?:[\s\u00a0\u202f]+\S+)?[\s\u00a0\u202f]*$/u;
+// Words that open the same shape without being a verb of saying: "— Oui,
+// mais la porte…", "— Bon, comme la dernière fois".
+const NOT_INCISE = new Set(`mais et ou donc car or ni puis alors comme que quand si
+	pour avec sans dans sur sous chez vers voici voilà encore toujours même aussi
+	enfin bref oui non bon ben bien tant parce lorsque puisque après avant pendant
+	depuis entre contre ensuite surtout peut-être`.split(/\s+/).filter(Boolean));
+// The incise's verb ends as French third persons do: dit, répondit, lança,
+// murmura, souffle, demandait, s'écrièrent.
+const SAYING_END = /(a|it|ut|int|ait|e|èrent|irent|urent)$/;
+
+function dialogue(text: string, start: number) {
+	const out: WsSpan[] = [];
+	const trimEnd = (to: number) => trimSpanEnd(text, to);
+	let from = start;
+	DIALOGUE_INCISE.lastIndex = from;
+	let m;
+	while ((m = DIALOGUE_INCISE.exec(text))) {
+		const verb = m[2].toLowerCase();
+		const at = m.index + m[0].length - m[1].length;
+		const end = /[,.!?\u2026]/.exec(text.slice(at + m[1].indexOf(m[2]) + m[2].length));
+		// "— Bon, vient-il ?" asks, and "— Oui, mais la porte…" goes on: neither is an incise.
+		// An auxiliary is no verb of saying: "un père de famille, a ses fils".
+		const aux = LEX[verb] === 'AUX' || LEX[verb] === 'MOD';
+		if (NOT_INCISE.has(verb) || aux || verb.length < 3 || (!/-/.test(m[1]) && !SAYING_END.test(verb)) || (end && end[0] === '?')) {
+			DIALOGUE_INCISE.lastIndex = m.index + 1;
+			continue;
+		}
+		const to = trimEnd(at);
+		if (to > from) out.push({ from, to });
+		if (!end) return out;
+		from = at + m[1].indexOf(m[2]) + m[2].length + end.index + 1;
+		while (from < text.length && DIALOGUE_SPACE.test(text.charAt(from))) from++;
+		// After the incise's comma, a word or two, a participle or "comme…"
+		// still describe the speaker. After its full stop the speaker goes
+		// on: "coupa-t-il, vibrant. Ça va marcher."
+		const rest = text.slice(from);
+		if (end[0] === ',' && DIALOGUE_TAIL.test(rest)) return out;
+		if (end[0] === ',' && NARRATION_GOES_ON.test(rest)) {
+			// the narrator's to the end of that sentence, the speaker's after it
+			const stop = /[.!\u2026]/.exec(rest);
+			if (!stop) return out;
+			from += stop.index + 1;
+			while (from < text.length && DIALOGUE_SPACE.test(text.charAt(from))) from++;
+		}
+		DIALOGUE_INCISE.lastIndex = from;
+	}
+	const to = trimEnd(text.length);
+	if (to > from) out.push({ from, to });
+	return out;
+}
+
 // ── Readability ──────────────────────────────────────────────────────────────
 
 // Spoken syllables, roughly: vowel groups, with a mute final e, and an
@@ -852,4 +926,5 @@ export const LANG_FR: WsLanguage = {
 		ce cette mais nous vous était avait sont ont été être leur je il elle ils
 		elles l' d' qu'`)),
 	names: ['french', 'français', 'francais', 'française', 'francaise'],
+	dialogue,
 };
